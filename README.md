@@ -16,10 +16,13 @@
 - 推荐用本地静态服务器打开，例如：`python3 -m http.server 8000`
 - 浏览器访问 `http://localhost:8000`
 
-3) 部署到 GitHub
-- 把整个项目 push 到 GitHub 仓库
-- 在仓库 Settings → Pages 中选择部署分支（通常是 `main` / root）
-- 之后更新 `data/prescout.csv` 并 push，即可更新网站数据
+3) 部署到 GitHub Pages（自动）
+- 把整个项目 push 到 GitHub 仓库 `main` 分支
+- 确认仓库启用 Actions（默认启用）
+- 首次 push 后，工作流会自动部署到 Pages：
+  - `Actions` 页签可查看 `Deploy static site to GitHub Pages` 任务
+  - `Settings → Pages` 中 Source 应显示 `GitHub Actions`
+- 后续只要更新 `data/prescout.csv` 并 push 到 `main`，网站会自动更新
 
 ## 配置
 
