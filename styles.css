@@ -27,10 +27,32 @@ body {
   color: var(--text);
   font-family: var(--sans);
   background:
-    radial-gradient(1200px 700px at 12% 12%, rgba(255, 209, 102, 0.20), transparent 55%),
-    radial-gradient(900px 600px at 86% 18%, rgba(6, 214, 160, 0.18), transparent 60%),
-    radial-gradient(900px 700px at 50% 110%, rgba(239, 71, 111, 0.14), transparent 60%),
+    radial-gradient(1200px 700px at 10% 10%, rgba(255, 209, 102, 0.20), transparent 55%),
+    radial-gradient(900px 620px at 85% 18%, rgba(6, 214, 160, 0.18), transparent 60%),
+    radial-gradient(920px 720px at 50% 110%, rgba(239, 71, 111, 0.14), transparent 60%),
     linear-gradient(180deg, var(--bg0), var(--bg1));
+  background-size: 180% 180%, 165% 165%, 185% 185%, 100% 100%;
+  background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
+  background-repeat: repeat;
+  animation: bg-loop 26s ease-in-out infinite;
+}
+
+@keyframes bg-loop {
+  0% {
+    background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
+  }
+  50% {
+    background-position: 100% 100%, 0% 80%, 40% 0%, 0 0;
+  }
+  100% {
+    background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
 }
 
 .topbar {
