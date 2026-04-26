@@ -16,6 +16,13 @@
 - 打开页面的“导入”页：支持粘贴腾讯文档表格（TSV/CSV）或导入 CSV 文件
 - 导入后会立刻更新（仅当前浏览器会话生效，不会写入磁盘）
 
+3) 部署到 GitHub Pages（自动）
+- 把整个项目 push 到 GitHub 仓库 `main` 分支
+- 确认仓库启用 Actions（默认启用）
+- 首次 push 后，工作流会自动部署到 Pages：
+  - `Actions` 页签可查看 `Deploy static site to GitHub Pages` 任务
+  - `Settings → Pages` 中 Source 应显示 `GitHub Actions`
+
 ## The Blue Alliance（可选）
 
 队伍详情页支持查询 TBA 的赛事资格赛排名（Qualification Rank）。
