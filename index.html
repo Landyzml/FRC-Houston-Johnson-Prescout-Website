@@ -17,6 +17,7 @@
       </div>
 
       <nav class="nav" aria-label="Primary">
+        <a class="nav-link" href="#overview">概览</a>
         <a class="nav-link" href="#table">总表</a>
         <a class="nav-link" href="#team">队伍</a>
         <a class="nav-link" href="#compare">对比</a>
@@ -28,6 +29,11 @@
       <section class="card" id="statusCard" hidden>
         <div class="card-title">状态</div>
         <div id="statusText" class="muted"></div>
+      </section>
+
+      <section class="card" id="viewOverview" hidden>
+        <div class="card-title">Prescout 概览</div>
+        <div id="overviewPanel" class="grid"></div>
       </section>
 
       <section class="card" id="viewTable" hidden>
@@ -71,7 +77,7 @@
       <section class="card" id="viewImport" hidden>
         <div class="card-title">导入数据</div>
         <p class="muted">
-          推荐做法：从腾讯文档导出为 <b>CSV</b>，放到项目 <code>data/prescout.csv</code>，然后刷新页面。
+          推荐做法：从腾讯文档导出为 <b>CSV</b>，放到项目 <code>data/prescout.csv</code>，然后刷新页面。部署到 GitHub Pages 后会自动读取这个文件。
         </p>
         <div class="grid import-grid">
           <div class="pane">

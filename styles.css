@@ -230,6 +230,45 @@ code, .code {
 .stat-k { font-size: 11px; color: var(--muted); }
 .stat-v { font-size: 18px; font-weight: 900; margin-top: 6px; }
 .stat-v small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.stat-v-small { font-size: 13px; word-break: break-word; }
+.stat-v-small a { color: var(--accent); text-decoration: none; }
+.stat-v-small a:hover { text-decoration: underline; }
+
+.rank-list { display: grid; gap: 8px; }
+.rank-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rank-item:hover { border-color: rgba(255, 209, 102, 0.36); }
+.rank-item strong { color: var(--accent); }
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.metric-card {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.metric-name { color: var(--muted); font-size: 12px; }
+.metric-range { margin-top: 6px; font-family: var(--mono); font-weight: 800; }
+.analysis-list { display: grid; gap: 8px; color: var(--muted); line-height: 1.55; }
+.analysis-list b { color: var(--text); }
+.best-cell {
+  color: var(--accent);
+  font-weight: 900;
+  background: rgba(255, 209, 102, 0.10) !important;
+}
 
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .chip {

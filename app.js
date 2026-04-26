@@ -3,10 +3,12 @@
 
 const DEFAULT_CONFIG = {
   dataPath: "./data/prescout.csv",
+  sourceUrl: "",
   teamIdColumnCandidates: ["Team", "team", "队号", "队伍", "队伍编号", "Team Number", "TeamNumber"],
   preferredMetricColumns: [],
   maxCompareTeams: 4,
-  ui: { defaultView: "table" },
+  topInsightCount: 3,
+  ui: { defaultView: "overview" },
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -62,6 +64,11 @@ function safeParseNumber(v) {
   }
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+function formatNumber(n) {
+  if (!Number.isFinite(n)) return "-";
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
 // Minimal CSV parser with quote support.
@@ -231,7 +238,7 @@ function escapeHtml(s) {
 
 function parseHash() {
   const h = (location.hash || "").replace(/^#/, "");
-  if (!h) return { view: state.config.ui?.defaultView || "table", team: null, compare: [] };
+  if (!h) return { view: state.config.ui?.defaultView || "overview", team: null, compare: [] };
 
   const [head, rest] = h.split("=", 2);
   const view = head.trim();
@@ -243,8 +250,8 @@ function parseHash() {
       .filter(Boolean);
     return { view, team: null, compare: list };
   }
-  if (["table", "import"].includes(view)) return { view, team: null, compare: [] };
-  return { view: "table", team: null, compare: [] };
+  if (["overview", "table", "import"].includes(view)) return { view, team: null, compare: [] };
+  return { view: "overview", team: null, compare: [] };
 }
 
 function setActiveNav(view) {
@@ -256,11 +263,86 @@ function setActiveNav(view) {
 }
 
 function showView(viewId) {
+  $("#viewOverview").hidden = viewId !== "overview";
   $("#viewTable").hidden = viewId !== "table";
   $("#viewTeam").hidden = viewId !== "team";
   $("#viewCompare").hidden = viewId !== "compare";
   $("#viewImport").hidden = viewId !== "import";
   setActiveNav(viewId);
+}
+
+function getMetricColumns(limit = Infinity) {
+  const preferred = (state.config.preferredMetricColumns || []).filter((c) => state.numericCols.includes(c));
+  const cols = preferred.length ? preferred : state.numericCols;
+  return cols.slice(0, limit);
+}
+
+function getTeamRow(teamId) {
+  return state.rows.find((r) => String(r[state.teamCol] ?? "").trim() === String(teamId).trim());
+}
+
+function normalizedValue(row, col) {
+  const v = safeParseNumber(row?.[col]);
+  const min = state.stats.min.get(col);
+  const max = state.stats.max.get(col);
+  if (v == null || min == null || max == null) return null;
+  return max === min ? 1 : Math.max(0, Math.min(1, (v - min) / (max - min)));
+}
+
+function findNotes(row) {
+  const noteCols = state.cols.filter((c) => /note|备注|评价|comment|优势|问题|特点/i.test(c));
+  return noteCols
+    .map((c) => String(row[c] ?? "").trim())
+    .filter(Boolean)
+    .join("；");
+}
+
+function renderOverview() {
+  const panel = $("#overviewPanel");
+  panel.innerHTML = "";
+  const ranked = [...state.stats.score.entries()].sort((a, b) => b[1] - a[1]);
+  const avgScore = ranked.length ? ranked.reduce((sum, [, score]) => sum + Number(score || 0), 0) / ranked.length : 0;
+  const sourceLink = state.config.sourceUrl
+    ? `<a href="${escapeHtml(state.config.sourceUrl)}" target="_blank" rel="noreferrer">腾讯文档源表</a>`
+    : escapeHtml(state.source.label);
+
+  panel.append(
+    el("div", { class: "pane" }, [
+      el("div", { class: "statrow" }, [
+        el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "队伍数" }), el("div", { class: "stat-v", html: String(state.rows.length) })]),
+        el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "数值指标" }), el("div", { class: "stat-v", html: String(state.numericCols.length) })]),
+        el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "平均评分" }), el("div", { class: "stat-v", html: `${formatNumber(avgScore)}<small> /100</small>` })]),
+        el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "数据来源" }), el("div", { class: "stat-v stat-v-small", html: sourceLink })]),
+      ]),
+    ])
+  );
+
+  const topCount = state.config.topInsightCount || 3;
+  const topTeams = ranked.slice(0, topCount);
+  const topList = el("div", { class: "rank-list" });
+  for (const [team, score] of topTeams) {
+    topList.append(
+      el("a", { class: "rank-item", href: `#team=${encodeURIComponent(team)}` }, [
+        el("span", { html: `#${escapeHtml(team)}` }),
+        el("strong", { html: `${escapeHtml(score)} /100` }),
+      ])
+    );
+  }
+
+  const metricSummary = el("div", { class: "metric-grid" });
+  for (const c of getMetricColumns(8)) {
+    metricSummary.append(
+      el("div", { class: "metric-card" }, [
+        el("div", { class: "metric-name", html: escapeHtml(c) }),
+        el("div", { class: "metric-range", html: `${formatNumber(state.stats.min.get(c))} → ${formatNumber(state.stats.max.get(c))}` }),
+      ])
+    );
+  }
+
+  panel.append(
+    el("div", { class: "pane col5" }, [el("div", { class: "pane-title", html: "Top 队伍" }), topList]),
+    el("div", { class: "pane col7" }, [el("div", { class: "pane-title", html: "指标范围" }), metricSummary])
+  );
 }
 
 function renderTable() {
@@ -276,7 +358,7 @@ function renderTable() {
     teamCol,
     "Score",
     "Rank",
-    ...(metricCols.length ? metricCols : state.numericCols.slice(0, 8)),
+    ...(metricCols.length ? metricCols : state.cols.filter((c) => c !== teamCol)),
   ];
 
   const rows = state.rows
@@ -363,7 +445,7 @@ function renderTeam(teamId) {
     return;
   }
 
-  const row = state.rows.find((r) => String(r[state.teamCol] ?? "").trim() === String(teamId).trim());
+  const row = getTeamRow(teamId);
   if (!row) {
     panel.append(el("div", { class: "pane", html: `<div class="muted">未找到队伍：<b>${escapeHtml(teamId)}</b></div>` }));
     return;
@@ -383,10 +465,14 @@ function renderTeam(teamId) {
     ]),
   ]);
 
-  const metricCols =
-    (state.config.preferredMetricColumns || []).filter((c) => state.numericCols.includes(c)) ||
-    [];
-  const cols = metricCols.length ? metricCols : state.numericCols.slice(0, 10);
+  const cols = getMetricColumns(10);
+  const rankedMetrics = cols
+    .map((c) => ({ col: c, pct: normalizedValue(row, c), value: row[c] }))
+    .filter((x) => x.pct != null)
+    .sort((a, b) => b.pct - a.pct);
+  const strengths = rankedMetrics.slice(0, 3);
+  const watchouts = rankedMetrics.slice(-3).reverse();
+  const notes = findNotes(row);
 
   const bars = el("div", { class: "bars" });
   for (const c of cols) {
@@ -409,6 +495,18 @@ function renderTeam(teamId) {
     el("div", { class: "hint muted", html: "这是一种简单的相对归一化：只适合 prescout 快速比较；后续可按你赛事规则自定义权重/阈值。" }),
   ]);
 
+  const insightPane = el("div", { class: "pane" }, [
+    el("div", { class: "pane-title", html: "自动分析" }),
+    el("div", {
+      class: "analysis-list",
+      html: `
+        <div><b>优势：</b>${strengths.length ? strengths.map((x) => `${escapeHtml(x.col)} ${escapeHtml(x.value)}`).join("、") : "暂无足够数值数据"}</div>
+        <div><b>关注：</b>${watchouts.length ? watchouts.map((x) => `${escapeHtml(x.col)} ${escapeHtml(x.value)}`).join("、") : "暂无足够数值数据"}</div>
+        <div><b>备注：</b>${notes ? escapeHtml(notes) : "没有备注列或备注为空"}</div>
+      `,
+    }),
+  ]);
+
   const rawTable = el("table", { class: "table" });
   const thead = el("thead");
   thead.append(el("tr", {}, [el("th", { html: "字段" }), el("th", { html: "值" })]));
@@ -420,7 +518,7 @@ function renderTeam(teamId) {
   rawTable.append(thead, tbody);
   const rawPane = el("div", { class: "pane" }, [el("div", { class: "pane-title", html: "原始数据" }), el("div", { class: "scroll" }, [rawTable])]);
 
-  panel.append(statsPane, analysisPane, rawPane);
+  panel.append(statsPane, insightPane, analysisPane, rawPane);
 
   btnAdd.onclick = () => {
     addCompare(team);
@@ -487,9 +585,12 @@ function renderComparePanel() {
     const tr = el("tr");
     tr.append(el("td", { html: escapeHtml(c) }));
     for (const team of teams) {
-      const row = state.rows.find((r) => String(r[state.teamCol] ?? "").trim() === team);
+      const row = getTeamRow(team);
       const v = row ? row[c] : "";
-      tr.append(el("td", { html: escapeHtml(v) }));
+      const nums = teams.map((t) => safeParseNumber(getTeamRow(t)?.[c])).filter((n) => n != null);
+      const best = nums.length ? Math.max(...nums) : null;
+      const isBest = best != null && safeParseNumber(v) === best;
+      tr.append(el("td", { class: isBest ? "best-cell" : "", html: escapeHtml(v) }));
     }
     tbody.append(tr);
   }
@@ -637,6 +738,7 @@ function onRoute() {
   showView(r.view);
 
   $("#viewTable").hidden = false; // ensure sections exist for render calls below
+  $("#viewOverview").hidden = false;
   $("#viewTeam").hidden = false;
   $("#viewCompare").hidden = false;
   $("#viewImport").hidden = false;
@@ -647,7 +749,9 @@ function onRoute() {
     for (const t of r.compare) addCompare(t);
   }
 
-  if (r.view === "table") {
+  if (r.view === "overview") {
+    renderOverview();
+  } else if (r.view === "table") {
     renderTable();
   } else if (r.view === "team") {
     if (r.team != null) $("#teamQuery").value = r.team;
@@ -672,6 +776,7 @@ async function boot({ force = false } = {}) {
     const model = await loadDataFromPath();
     setModel(model);
     $("#viewTable").hidden = false;
+    $("#viewOverview").hidden = false;
     $("#viewTeam").hidden = false;
     $("#viewCompare").hidden = false;
     $("#viewImport").hidden = false;
