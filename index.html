@@ -109,7 +109,12 @@
           <div class="pane">
             <div class="pane-title">The Blue Alliance（可选）</div>
             <input id="tbaKey" class="input" type="password" placeholder="粘贴你的 TBA Read API Key（只在本次浏览器会话使用）" />
-            <div class="hint muted">Key 会保存在内存里，不会写入文件；GitHub Pages 上不要把 Key 写进仓库。</div>
+            <div class="toolbar" style="margin-top:10px">
+              <button id="btnClearTbaKey" class="btn btn-ghost" type="button">清除已保存 Key</button>
+              <div class="spacer"></div>
+              <div id="tbaKeySaved" class="hint muted"></div>
+            </div>
+            <div class="hint muted">可选：会把 Key 存到浏览器 localStorage（仅本机方便，不安全；懂开发者工具的人仍可看到）。</div>
             <input id="tbaProxy" class="input" type="text" placeholder="（可选）TBA 本地代理，例如：http://localhost:8787" style="margin-top:10px" />
             <div class="hint muted">若浏览器提示 CORS 或不想在前端输入 Key，可运行仓库内 `tba-proxy.mjs` 并把代理地址填这里。</div>
           </div>

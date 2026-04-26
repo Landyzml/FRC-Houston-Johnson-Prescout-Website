@@ -46,6 +46,8 @@ const state = {
   compare: new Set(),
 };
 
+const LS_TBA_KEY = "frc_prescout_tba_key";
+
 function showStatus(msg) {
   const card = $("#statusCard");
   const t = $("#statusText");
@@ -56,6 +58,18 @@ function showStatus(msg) {
   }
   card.hidden = false;
   t.textContent = msg;
+}
+
+function maskKey(key) {
+  const k = String(key || "");
+  if (!k) return "";
+  return "*".repeat(Math.max(15, Math.min(48, k.length)));
+}
+
+function updateTbaKeyUi() {
+  const saved = $("#tbaKeySaved");
+  if (!saved) return;
+  saved.textContent = state.tba.key ? `已保存：${maskKey(state.tba.key)}` : "未保存";
 }
 
 function safeParseNumber(v) {
@@ -1230,11 +1244,33 @@ function wireUI() {
   $("#tbaKey")?.addEventListener("input", (e) => {
     state.tba.key = String(e.target.value || "").trim();
     state.tba.cache.clear();
+    updateTbaKeyUi();
+    try {
+      if (state.tba.key) localStorage.setItem(LS_TBA_KEY, state.tba.key);
+      else localStorage.removeItem(LS_TBA_KEY);
+    } catch {
+      // ignore
+    }
   });
 
   $("#tbaProxy")?.addEventListener("input", (e) => {
     state.tba.proxyBase = String(e.target.value || "").trim();
     state.tba.cache.clear();
+  });
+
+  $("#btnClearTbaKey")?.addEventListener("click", () => {
+    state.tba.key = "";
+    state.tba.cache.clear();
+    const input = $("#tbaKey");
+    if (input) input.value = "";
+    try {
+      localStorage.removeItem(LS_TBA_KEY);
+    } catch {
+      // ignore
+    }
+    updateTbaKeyUi();
+    showStatus("已清除已保存的 TBA Key");
+    setTimeout(() => showStatus(""), 1200);
   });
 
   window.addEventListener("hashchange", onRoute);
@@ -1307,6 +1343,15 @@ async function boot({ force = false } = {}) {
   showStatus("");
   await loadConfig();
   await loadSamplePreview();
+
+  // Restore TBA key from localStorage (best-effort; not secure).
+  try {
+    const stored = localStorage.getItem(LS_TBA_KEY) || "";
+    state.tba.key = stored.trim();
+  } catch {
+    // ignore
+  }
+  updateTbaKeyUi();
 
   // Do not auto-load on startup: only show the current pasted/imported dataset.
   clearModel();
