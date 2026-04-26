@@ -36,8 +36,10 @@ const state = {
     max: new Map(),
     score: new Map(), // teamId -> score 0..100
     rank: new Map(), // teamId -> 1..N
+    epaRank: new Map(),
+    tierRank: new Map(),
   },
-  table: { sortCol: null, sortDir: "desc", query: "" },
+  table: { sortCol: "Rank", sortDir: "asc", query: "", rankMode: "epa" },
   compare: new Set(),
 };
 
@@ -185,6 +187,8 @@ function computeStats() {
   state.stats.max.clear();
   state.stats.score.clear();
   state.stats.rank.clear();
+  state.stats.epaRank.clear();
+  state.stats.tierRank.clear();
 
   for (const c of state.numericCols) {
     let min = Infinity;
@@ -224,8 +228,37 @@ function computeStats() {
     state.stats.score.set(team, Math.round(score01 * 1000) / 10); // one decimal
   }
 
-  const ranked = [...state.stats.score.entries()].sort((a, b) => b[1] - a[1]);
-  ranked.forEach(([team], idx) => state.stats.rank.set(team, idx + 1));
+  const epaRanked = [...state.stats.score.entries()].sort((a, b) => b[1] - a[1]);
+  epaRanked.forEach(([team], idx) => state.stats.epaRank.set(team, idx + 1));
+
+  const tierCol = state.cols.find((c) => normalizeColName(c) === "tier" || c.includes("排行"));
+  const tierRanked = [...state.rows].sort((a, b) => {
+    const at = tierRankValue(a[tierCol]);
+    const bt = tierRankValue(b[tierCol]);
+    if (at !== bt) return at - bt;
+    const ae = safeParseNumber(a.EPA) ?? -Infinity;
+    const be = safeParseNumber(b.EPA) ?? -Infinity;
+    if (ae !== be) return be - ae;
+    return String(a[state.teamCol] ?? "").localeCompare(String(b[state.teamCol] ?? ""), undefined, { numeric: true });
+  });
+  tierRanked.forEach((row, idx) => {
+    const team = String(row[state.teamCol] ?? "").trim();
+    if (team) state.stats.tierRank.set(team, idx + 1);
+  });
+  updateActiveRank();
+}
+
+function tierRankValue(value) {
+  const s = String(value ?? "").trim().toUpperCase();
+  if (!s || s === "N/A" || s === "？" || s === "?") return 99;
+  const match = s.match(/^T(\d+(?:\.\d+)?)$/);
+  return match ? Number(match[1]) : 99;
+}
+
+function updateActiveRank() {
+  state.stats.rank.clear();
+  const source = state.table.rankMode === "tier" ? state.stats.tierRank : state.stats.epaRank;
+  for (const [team, rank] of source.entries()) state.stats.rank.set(team, rank);
 }
 
 function escapeHtml(s) {
@@ -300,6 +333,15 @@ function findNotes(row) {
 function renderOverview() {
   const panel = $("#overviewPanel");
   panel.innerHTML = "";
+  if (!state.rows.length) {
+    panel.append(
+      el("div", {
+        class: "pane",
+        html: `<div class="empty-title">还没有载入真实 prescout 数据</div><div class="muted">请从腾讯文档导出 CSV，覆盖 <code>data/prescout.csv</code>，然后刷新页面。现在我已经移除了示例队伍，避免误导。</div>`,
+      })
+    );
+    return;
+  }
   const ranked = [...state.stats.score.entries()].sort((a, b) => b[1] - a[1]);
   const avgScore = ranked.length ? ranked.reduce((sum, [, score]) => sum + Number(score || 0), 0) / ranked.length : 0;
   const sourceLink = state.config.sourceUrl
@@ -350,15 +392,25 @@ function renderTable() {
   table.innerHTML = "";
   const teamCol = state.teamCol;
   if (!teamCol) return;
+  if (!state.rows.length) {
+    table.append(
+      el("tbody", {}, [
+        el("tr", {}, [
+          el("td", {
+            html: `还没有真实数据。请从腾讯文档导出 CSV，覆盖 <code>data/prescout.csv</code>，然后刷新页面。`,
+          }),
+        ]),
+      ])
+    );
+    return;
+  }
 
   const q = (state.table.query || "").trim().toLowerCase();
-  const metricCols =
-    (state.config.preferredMetricColumns || []).filter((c) => state.cols.includes(c)) || [];
+  const dataCols = ["Team Name", "EPA", "Tier"].filter((c) => state.cols.includes(c));
   const showCols = [
     teamCol,
-    "Score",
+    ...dataCols,
     "Rank",
-    ...(metricCols.length ? metricCols : state.cols.filter((c) => c !== teamCol)),
   ];
 
   const rows = state.rows
@@ -398,8 +450,9 @@ function renderTable() {
   const thead = el("thead");
   const trh = el("tr");
   for (const c of showCols) {
+    const label = c === "Tier" ? "T" : c;
     const th = el("th", {
-      html: escapeHtml(c) + (state.table.sortCol === c ? (state.table.sortDir === "asc" ? " ▲" : " ▼") : ""),
+      html: escapeHtml(label) + (state.table.sortCol === c ? (state.table.sortDir === "asc" ? " ▲" : " ▼") : ""),
       onclick: () => {
         if (state.table.sortCol === c) state.table.sortDir = state.table.sortDir === "asc" ? "desc" : "asc";
         else {
@@ -452,16 +505,20 @@ function renderTeam(teamId) {
   }
 
   const team = String(row[state.teamCol] ?? "").trim();
+  const teamName = String(row["Team Name"] ?? row["队名"] ?? "").trim();
+  const teamTitle = teamName ? `${team} · ${teamName}` : team;
   const score = state.stats.score.get(team) ?? "";
   const rank = state.stats.rank.get(team) ?? "";
+  const tier = String(row.Tier ?? row["排行（t0-4）"] ?? "").trim() || "-";
+  const canTrench = String(row["Can Trench"] ?? row["能否过trench"] ?? "").trim() || "-";
 
   const statsPane = el("div", { class: "pane" }, [
-    el("div", { class: "pane-title", html: `队伍 <b>${escapeHtml(team)}</b>` }),
+    el("div", { class: "pane-title", html: `队伍 <b>${escapeHtml(teamTitle)}</b>` }),
     el("div", { class: "statrow" }, [
       el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "综合评分" }), el("div", { class: "stat-v", html: `${escapeHtml(score)}<small> /100</small>` })]),
       el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "排名（按评分）" }), el("div", { class: "stat-v", html: `${escapeHtml(rank)}` })]),
-      el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "可对比指标数" }), el("div", { class: "stat-v", html: `${state.numericCols.length}` })]),
-      el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "数据列数" }), el("div", { class: "stat-v", html: `${state.cols.length}` })]),
+      el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "Tier" }), el("div", { class: "stat-v", html: escapeHtml(tier) })]),
+      el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "是否能过 Trench" }), el("div", { class: "stat-v", html: escapeHtml(canTrench) })]),
     ]),
   ]);
 
@@ -470,10 +527,6 @@ function renderTeam(teamId) {
     .map((c) => ({ col: c, pct: normalizedValue(row, c), value: row[c] }))
     .filter((x) => x.pct != null)
     .sort((a, b) => b.pct - a.pct);
-  const strengths = rankedMetrics.slice(0, 3);
-  const watchouts = rankedMetrics.slice(-3).reverse();
-  const notes = findNotes(row);
-
   const bars = el("div", { class: "bars" });
   for (const c of cols) {
     const v = safeParseNumber(row[c]);
@@ -495,15 +548,24 @@ function renderTeam(teamId) {
     el("div", { class: "hint muted", html: "这是一种简单的相对归一化：只适合 prescout 快速比较；后续可按你赛事规则自定义权重/阈值。" }),
   ]);
 
+  const extraFieldLabels = {
+    "Robot Type": "机器类型",
+    Playstyle: "打法",
+    "Robot Status": "机器状态",
+    备注: "备注",
+  };
+  const extraFields = Object.keys(extraFieldLabels);
+  const extraRows = extraFields
+    .map((field) => [field, String(row[field] ?? "").trim()])
+    .filter(([, value]) => value);
+
   const insightPane = el("div", { class: "pane" }, [
-    el("div", { class: "pane-title", html: "自动分析" }),
+    el("div", { class: "pane-title", html: "其他数据" }),
     el("div", {
       class: "analysis-list",
-      html: `
-        <div><b>优势：</b>${strengths.length ? strengths.map((x) => `${escapeHtml(x.col)} ${escapeHtml(x.value)}`).join("、") : "暂无足够数值数据"}</div>
-        <div><b>关注：</b>${watchouts.length ? watchouts.map((x) => `${escapeHtml(x.col)} ${escapeHtml(x.value)}`).join("、") : "暂无足够数值数据"}</div>
-        <div><b>备注：</b>${notes ? escapeHtml(notes) : "没有备注列或备注为空"}</div>
-      `,
+      html: extraRows.length
+        ? extraRows.map(([field, value]) => `<div><b>${escapeHtml(extraFieldLabels[field] || field)}：</b>${escapeHtml(value)}</div>`).join("")
+        : `<div class="muted">暂无其他数据</div>`,
     }),
   ]);
 
@@ -675,12 +737,23 @@ function setModel({ rows, cols }) {
   state.teamCol = pickTeamColumn(cols, state.config.teamIdColumnCandidates || DEFAULT_CONFIG.teamIdColumnCandidates);
   state.numericCols = inferNumericColumns(rows, cols).filter((c) => c !== state.teamCol);
   computeStats();
+  state.table.sortCol = "Rank";
+  state.table.sortDir = "asc";
+  updateRankModeButton();
 }
 
 function wireUI() {
   $("#tableSearch").addEventListener("input", (e) => {
     state.table.query = e.target.value || "";
     renderTable();
+  });
+  $("#rankMode").addEventListener("click", () => {
+    state.table.rankMode = state.table.rankMode === "epa" ? "tier" : "epa";
+    updateActiveRank();
+    state.table.sortCol = "Rank";
+    state.table.sortDir = "asc";
+    updateRankModeButton();
+    onRoute();
   });
   $("#btnReload").addEventListener("click", async () => {
     await boot({ force: true });
@@ -733,6 +806,12 @@ function wireUI() {
   window.addEventListener("hashchange", onRoute);
 }
 
+function updateRankModeButton() {
+  const button = $("#rankMode");
+  if (!button) return;
+  button.textContent = state.table.rankMode === "tier" ? "Tier Rank" : "EPA Rank";
+}
+
 function onRoute() {
   const r = parseHash();
   showView(r.view);
@@ -780,7 +859,11 @@ async function boot({ force = false } = {}) {
     $("#viewTeam").hidden = false;
     $("#viewCompare").hidden = false;
     $("#viewImport").hidden = false;
-    showStatus(`已加载：${state.source.label}（${state.rows.length} 行，队号列：${state.teamCol}）`);
+    if (state.rows.length) {
+      showStatus(`已加载：${state.source.label}（${state.rows.length} 行，队号列：${state.teamCol}）`);
+    } else {
+      showStatus(`已加载空模板：${state.source.label}。请从腾讯文档导出 CSV 后覆盖这个文件。`);
+    }
   } catch (err) {
     // If opened via file://, fetch will often fail. Provide a clear hint.
     const hint =

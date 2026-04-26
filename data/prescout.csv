@@ -1,5 +1,76 @@
-Team,Auto,Teleop,Endgame,Reliability,Notes
-254,18,54,12,0.92,"Fast cycles; strong auto; stable"
-1678,16,52,10,0.88,"Great driver; consistent scoring"
-971,12,44,14,0.80,"Endgame specialist; slower early"
-4414,10,40,8,0.76,"Solid all-round; improving"
+Team Number,Team Name,EPA,Tier,Can Trench,Robot Type,Playstyle,Robot Status,备注
+8,Paly Robotics,151,T0.5,是,炮台,得分加 feed,好,容易被防守车影响， 有时会卡球
+33,Killer Bees,174.6,T2,否,侧面发射的10131,得分加 feed,好,Intake效率不是很高，车略显笨重， 发射效率一般，准确率中下
+48,Team E.L.I.T.E.,97.8,T2.5,是,炮台,得分加 feed,好,自动fuel打不进，临场指挥还行，命中率不高
+67,The HOT Team,169.8,T3,是,小254,得分加 feed,差 发射不稳定,手动瞄准车辆，intake效率还可以
+117,Steel Dragons,135.8,T2,是,2CC反向发射,得分加 feed,好,第二次double swip没打
+118,Robonauts,197.9,T1.5,是,双炮台,得分 feed 对方场地干扰,好,车效率比较高， 很灵活，能很好的应对防守
+179,Children of the Swamp,126.8,T1,是,双炮台,得分加 feed,好,效率还可以，车开得很灵
+190,Gompei and the HERD,155.5,T2,是,固定炮台,得分 feed 对方场地干扰,好,在玩格斗机器人，结构团队会很爱这个操作手，给自己intake撞断了
+245,Adambots,81.7,T1.5,是,固定炮台,防守车,车速较高,效率还可以，车开得很灵
+321,RoboLancers,33.7,T3,否,固定炮台,得分加 feed,差 发射不稳定,车的效率比较高，后面intake撞坏了
+334,TechKnights,89.5,T2,是,瀑布,得分加 feed,车辆一般，射球效率还行,炮台很慢
+360,The Revolution,178.2,T2,是,2CC,得分加 feed,车辆一般，射球效率还行,防守很有侵略性
+422,The Mech Tech Dragons,143.1,T1.5,是,炮台,得分 feed 对方场地干扰,车辆不错，射球效率比较高,完全不知道自己在干什么，inactive的时候在自己半区乱晃
+498,The Cobra Commanders,245.6,T1.5,否,瀑布,得分加 feed/后半场变为防守,车辆不错，射球效率比较高,车开的比较灵性，炮台效率还可以
+619,Cavalier Robotics,146,T2,是,固定炮台,得分加 feed,车辆一般，射球效率还行,"他们的车在发射时大多数时间不吸球, 所以没有发挥出炮台车的优势。"
+772,Sabre Bytes Robotics,27.8,T1.5,是,反向瀑布,防守车,车速较高,发射时移动速度极慢，发射效率也很低，打不准
+836,The RoboBees,160.7,T2,是,炮台,得分加 feed,车辆一般，射球效率还行,好像只会走 trench，不会摆脱防守
+955,Ctrl C,195.6,T1.5,是,固定炮台,得分 feed 对方场地干扰,车辆一般，射球效率还行,操作手不行
+1002,CircuitRunners Robotics,179.1,T3,是,1CC,跑Cycle,中规中矩,没打过比赛
+1073,The Force Team,167.8,t3,是,角落炮台,得分加 feed,差，打一半没电了,feed 很差，一次 feed 极少
+1076,PiHi Samurai,68.6,t3.5,是,炮台车,得分加 feed,一般，feed 有可能往 hub 里打,不怎么怕防守
+1306,BadgerBOTS,164.4,t1,是,8214 瀑布车,得分加吸球，很少 feed，只 feed 半仓,好,操作手不行
+1792,Round Table Robotics,139.7,t3,否,炮台车,得分加 feed,差,怕防守
+1908,ShoreBots,144.4,t2.5,是,炮台车,得分加 feed,还行，自动出问题了,手瞄，瞄不准
+2040,DERT - Dunlap Eagles Robotics Team,123,t3.5,是,3cc,得分加推球,好,发射时不吸球，吸球时不发射
+2096,RoboActive,56.6,？,未知,？,？,？,炮台很稳，车开的很猛
+2252,The Mavericks,149,t2.5,是,炮台车,得分加 feed,好,发射时不吸球，吸球时不发射
+2337,EngiNERDs,164.8,t1.5,是,双炮台,得分加 feed,好,有时操作不行
+2522,Royal Robotics,146.9,t2.5,否,炮台车,得分加 feed,好,远处发射准度降低
+2619,The Charge,80.5,t4,是,炮台车,得分加 feed,好,发射效率极低
+2638,Rebel Robotics,130.9,t2,否,炮台车,得分加 feed,好,intake很慢
+2704,Roaring Robotics,71.5,t4,是,1cc,得分加 feed,差，自动很不稳，打球也不稳,发射慢 但能一直打
+2848,Rangers,166.6,t3,是,炮台车,得分加 feed,好,N/A
+2877,LigerBots,183.3,t2,是,炮台车,得分加 feed,好,发射不稳定
+3061,Huskie Robotics,81.8,t2,是,炮台车,得分加 feed,好,N/A
+3255,SuperNURDs,162.8,t1.5,是,瀑布车,得分加 feed,好,feed瞄准不稳定
+3414,Hackbots,182.4,t2,否,炮台车,得分加 feed,好,feed很好
+3536,Electro Eagles,77.4,t4,是,双炮台,得分加 feed,好,速度快 操作手灵活
+3603,Cyber Coyotes,112,T4,是,低车 单发炮台,防守,不稳定,feed很好 速度慢
+3620,Average Joes,42.3,T2,否,高车 炮台,大6941 边吃边大 mid court feed,不稳定,发射慢
+3630,Stampede,106.7,T3,是,低车 炮台,cycle,中下,稳定 和254打势均力敌
+3770,BlitzCreek,158.2,T4,否,中高车 1cc,超慢cycle,差,N/A
+4391,BraveBots,175.5,T1,是,矮wcp,cycle,高,操作手很唐
+4451,ROBOTZ Garage,93.5,T1.5,是,矮车 1cc,快cycle,不稳定,intake不好用
+4522,Team SCREAM,212.7,T1,是,矮 瀑布,快cycle,稳定,操作手有点唐
+4635,PrepaTec - Botbusters,200,T0.5,是,矮 炮台,快cycle 一边打一边收,高稳定,发射慢
+4946,The Alpha Dogs,265,T1.5,否,半圆式中心炮台 超高车,Feed 在家打,稳定,操作手躺中唐
+4967,That ONE Team-OurNextEngineers,39.4,T3,是,低车 1cc,推球 打球,差,速度很快 对标27
+5026,Iron Panthers,178.8,T0,是,低瀑布,快cycle,稳定,feed很快
+5968,Little Apple Cyborgs,50.2,T2,是,低车 炮台,cycle,中等,感觉操作手有点克制他们的机器
+6324,The Blue Devils,41.2,T2,是,瀑布,cycle,一般,乌龟速度 感觉没买seasonal pass
+6652,Tigres,54.4,T2.5,是,1cc,cycle,偏下,发射非常快
+6766,AtomStorm,129.9,T2,是,现在是瀑布,cycle,中等,感觉哥们儿有气无力
+6829,Ignite Robotics,100.8,T2.5,否,瀑布,自家打 不经常去mid,一般,挂车狂魔
+6940,Violet Z,76.6,T3,是,中心炮台,cycle,中,正规炮台打法
+7220,Steel Falcons,168.6,T0,是,小瀑布,cycle,高很稳,机器感觉没检修
+7257,Semiconductors,118.6,T1,是,炮台,feed + cycle,稳定,HP自动给我看爽了
+7403,Lightning Blue Lizards,22.4,T4,是,辅助车,推球,差,炮台跑cycle 有点帅
+7551,Extreme Mechanism,46.5,T4,是,辅助车,全力以赴的得分,差,N/A
+7558,ALT-F4,235.8,T0.5,是,瀑布,Feed 跑Cycle,极好,N/A
+7563,SESI SENAI MEGAZORD,109.1,T3,是,炮台,推球 在家打,中规中矩,自动没打完
+8612,Calvin Christian Robotics,133.5,T3,是,2CC,跑Cycle 最后挂车,中规中矩,自动坏了
+9072,TigerBots,172.7,T1,是,炮台,Feed 跑Cycle,极好,正版挂车狂魔
+9277,Sparkans,73.1,T4,是,炮台,在家打球,中下,瀑布但是一次只能打一个球
+9483,Overcharge,346.3,T0,否,炮台,Feed 在家打,完美,Double Swipe 跑的有点飘
+9484,Robot's District,82.7,T3,是,炮台,跑Cycle(?),中规中矩,逛街来的
+9597,Luban Robotics,126.5,N/A,否,3CC,N/A,N/A,逛街来的
+9646,The Marinators,38.4,T4,否,防守车,防守,中规中矩,
+9757,Mecha Marauders,134.1,T3,是,炮台,Cycle(?),中下,
+10014,REBELLION,95.1,T3,是,3CC,跑Cycle,中规中矩,
+10114,Phantom Talons,46.6,T4,是,防守,防守 挂车,差,
+10217,Catahoula Blue Dogs,58.4,T4,是,1CC,跑Cycle,差,
+10340,ITKAN Girls,220.7,T0.5,是,瀑布,Feed 跑Cycle,极好,
+10396,Mostra,63.9,T4,是,炮台,转圈圈,中下,
+11269,Batteries Not Included,17.4,T4,是,炮台？,转圈圈,差,

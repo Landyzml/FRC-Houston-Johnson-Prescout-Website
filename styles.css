@@ -218,6 +218,7 @@ code, .code {
   padding: 12px;
 }
 .pane-title { font-weight: 800; margin-bottom: 8px; }
+.empty-title { font-weight: 900; font-size: 18px; margin-bottom: 8px; }
 
 .statrow { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
 .stat {

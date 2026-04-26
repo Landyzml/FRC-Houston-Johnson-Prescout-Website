@@ -10,7 +10,7 @@
 
 1) 准备数据
 - 在腾讯文档中把表格 **导出为 CSV**
-- 把文件放到 `data/prescout.csv`（可参考 `data/prescout.sample.csv`）
+- 用导出的真实文件覆盖 `data/prescout.csv`（`data/prescout.sample.csv` 只是示例，不会自动代表你的腾讯文档数据）
 
 2) 打开网页
 - 推荐用本地静态服务器打开，例如：`python3 -m http.server 8000`

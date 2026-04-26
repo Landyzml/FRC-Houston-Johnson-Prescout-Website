@@ -2,7 +2,7 @@
   "dataPath": "./data/prescout.csv",
   "sourceUrl": "https://docs.qq.com/sheet/DSnN2d1dOdkZJVmRH?tab=BB08J2",
   "teamIdColumnCandidates": ["Team", "team", "队号", "队伍", "队伍编号", "Team Number", "TeamNumber"],
-  "preferredMetricColumns": [],
+  "preferredMetricColumns": ["EPA"],
   "maxCompareTeams": 4,
   "topInsightCount": 3,
   "ui": {
