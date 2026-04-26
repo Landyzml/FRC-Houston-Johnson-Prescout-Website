@@ -119,6 +119,14 @@ body {
 }
 
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.textarea { min-height: 160px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.viz-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.viz-card { border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.02); }
+.viz-title { font-weight: 700; margin: 0 0 8px; }
+.viz-sub { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.viz-svg { width: 100%; height: auto; display: block; }
+.dot-tooltip { position: absolute; z-index: 5; min-width: 180px; max-width: 320px; padding: 10px 12px; border-radius: 12px; background: rgba(12, 18, 28, 0.96); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 10px 30px rgba(0,0,0,0.35); color: rgba(255,255,255,0.92); font-size: 13px; line-height: 1.35; pointer-events: none; }
+.dot-tooltip b { color: rgba(255,255,255,0.95); }
 .spacer { flex: 1; }
 
 .input {

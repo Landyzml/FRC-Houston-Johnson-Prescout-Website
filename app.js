@@ -31,6 +31,9 @@ const state = {
   cols: [],
   teamCol: null,
   numericCols: [],
+  import: { active: false, replaced: false, backup: null },
+  viz: { mode: "scatter" },
+  tba: { key: "", proxyBase: "", cache: new Map() },
   stats: {
     min: new Map(),
     max: new Map(),
@@ -73,8 +76,16 @@ function formatNumber(n) {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
-// Minimal CSV parser with quote support.
-function parseCSV(text) {
+function detectDelimiter(text) {
+  const firstLine = String(text || "").split(/\r?\n/).find((l) => l.trim().length) || "";
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  if (tabCount >= 2 && tabCount >= commaCount) return "\t";
+  return ",";
+}
+
+// Minimal delimited parser with quote support (CSV/TSV).
+function parseCSV(text, delimiter = ",") {
   const rows = [];
   let i = 0;
   let field = "";
@@ -116,7 +127,7 @@ function parseCSV(text) {
       i += 1;
       continue;
     }
-    if (ch === ",") {
+    if (ch === delimiter) {
       pushField();
       i += 1;
       continue;
@@ -158,7 +169,7 @@ function pickTeamColumn(cols, candidates) {
     if (found) return found[0];
   }
   // fallback: any column that looks like team number
-  const fuzzy = normCols.find(([, n]) => n.includes("team") && n.includes("number"));
+  const fuzzy = normCols.find(([, n]) => (n.includes("team") && n.includes("num")) || n.includes("队号"));
   return fuzzy ? fuzzy[0] : cols[0] ?? null;
 }
 
@@ -255,6 +266,20 @@ function tierRankValue(value) {
   return match ? Number(match[1]) : 99;
 }
 
+function normalizeTierDisplay(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  const match = s.match(/^t(\d+(?:\.\d+)?)$/i);
+  if (match) return `T${match[1]}`;
+  return s;
+}
+
+function tierCategory(value) {
+  const s = normalizeTierDisplay(value);
+  if (!s || s === "N/A" || s === "？" || s === "?") return "未知";
+  return s;
+}
+
 function updateActiveRank() {
   state.stats.rank.clear();
   const source = state.table.rankMode === "tier" ? state.stats.tierRank : state.stats.epaRank;
@@ -283,7 +308,7 @@ function parseHash() {
       .filter(Boolean);
     return { view, team: null, compare: list };
   }
-  if (["overview", "table", "import"].includes(view)) return { view, team: null, compare: [] };
+  if (["overview", "table", "viz", "import"].includes(view)) return { view, team: null, compare: [] };
   return { view: "overview", team: null, compare: [] };
 }
 
@@ -298,6 +323,7 @@ function setActiveNav(view) {
 function showView(viewId) {
   $("#viewOverview").hidden = viewId !== "overview";
   $("#viewTable").hidden = viewId !== "table";
+  $("#viewViz").hidden = viewId !== "viz";
   $("#viewTeam").hidden = viewId !== "team";
   $("#viewCompare").hidden = viewId !== "compare";
   $("#viewImport").hidden = viewId !== "import";
@@ -387,31 +413,28 @@ function renderOverview() {
   );
 }
 
-function renderTable() {
-  const table = $("#teamsTable");
-  table.innerHTML = "";
+function renderViz() {
+  const viz = $("#tableViz");
+  viz.innerHTML = "";
   const teamCol = state.teamCol;
   if (!teamCol) return;
   if (!state.rows.length) {
-    table.append(
-      el("tbody", {}, [
-        el("tr", {}, [
-          el("td", {
-            html: `还没有真实数据。请从腾讯文档导出 CSV，覆盖 <code>data/prescout.csv</code>，然后刷新页面。`,
-          }),
-        ]),
-      ])
+    viz.append(
+      el("div", {
+        class: "viz-card",
+        html: `还没有数据。请到“导入”页粘贴表格或导入 CSV，然后回来查看图表。`,
+      })
     );
     return;
   }
 
   const q = (state.table.query || "").trim().toLowerCase();
-  const dataCols = ["Team Name", "EPA", "Tier"].filter((c) => state.cols.includes(c));
-  const showCols = [
-    teamCol,
-    ...dataCols,
-    "Rank",
-  ];
+  const tierCol =
+    state.cols.find(
+      (c) => normalizeColName(c) === "tier" || c.includes("排行") || normalizeColName(c).includes("t0-4")
+    ) || "Tier";
+  const epaCol = state.cols.find((c) => normalizeColName(c) === "epa") || "EPA";
+  const nameCol = state.cols.find((c) => normalizeColName(c) === "team name" || normalizeColName(c) === "teamname") || "Team Name";
 
   const rows = state.rows
     .filter((r) => {
@@ -432,6 +455,237 @@ function renderTable() {
       return { ...r, Score: state.stats.score.get(team) ?? "", Rank: state.stats.rank.get(team) ?? "" };
     });
 
+  // ---- Chart 1: dot graph (Tier vs EPA) ----
+  const points = rows
+    .map((r) => {
+      const team = String(r[teamCol] ?? "").trim();
+      const name = String(r[nameCol] ?? "").trim();
+      const epa = safeParseNumber(r[epaCol]);
+      const tier = tierCategory(r[tierCol]);
+      return { team, name, epa, tier };
+    })
+    .filter((p) => p.team && p.epa != null && p.tier !== "未知");
+
+  // X axis: T4 -> T0 (descending). Unknown tiers are excluded.
+  const tiers = [...new Set(points.map((p) => p.tier))].sort((a, b) => tierRankValue(b) - tierRankValue(a));
+  const rawMinEpa = Math.min(...points.map((p) => p.epa));
+  const rawMaxEpa = Math.max(...points.map((p) => p.epa));
+  const padEpa = (rawMaxEpa - rawMinEpa) * 0.08;
+  const minEpa = rawMinEpa - (Number.isFinite(padEpa) ? padEpa : 0);
+  const maxEpa = rawMaxEpa + (Number.isFinite(padEpa) ? padEpa : 0);
+
+  const dotCard = el("div", { class: "viz-card" }, [
+    el("div", { class: "viz-title", html: "Dot Graph" }),
+    el("div", { class: "viz-sub", html: "X 轴：EPA｜Y 轴：Tier｜点击点进入队伍详情" }),
+  ]);
+
+  const w = 1100;
+  const h = 720;
+  const pad = { l: 56, r: 18, t: 18, b: 62 };
+  const plotW = w - pad.l - pad.r;
+  const plotH = h - pad.t - pad.b;
+  const yStep = tiers.length > 1 ? plotH / (tiers.length - 1) : plotH / 2;
+  const yIndex = (tier) => {
+    const idx = tiers.indexOf(tier);
+    if (idx < 0) return tiers.length - 1;
+    // Flip: show T0 at top, T4 at bottom (for Tier axis)
+    return (tiers.length - 1) - idx;
+  };
+  const yOf = (tier) => pad.t + yIndex(tier) * yStep;
+  const xOf = (epa) => {
+    const t = maxEpa === minEpa ? 0.5 : (epa - minEpa) / (maxEpa - minEpa);
+    return pad.l + t * plotW;
+  };
+
+  const jitter = (team) => {
+    // stable pseudo-random [-1, 1]
+    const s = String(team ?? "");
+    let hash = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      hash ^= s.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const u = (hash >>> 0) / 0xffffffff;
+    return u * 2 - 1;
+  };
+
+  const xTicks = 5;
+  const grid = [];
+  for (let i = 0; i <= xTicks; i++) {
+    const t = i / xTicks;
+    const x = pad.l + t * plotW;
+    const v = Math.round((minEpa + (maxEpa - minEpa) * t) * 10) / 10;
+    grid.push(`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${h - pad.b}" stroke="rgba(255,255,255,0.08)" />`);
+    grid.push(`<text x="${x}" y="${h - 30}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="12">${v}</text>`);
+  }
+  const yLabels = tiers
+    .map((t) => {
+      const y = yOf(t);
+      grid.push(`<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="rgba(255,255,255,0.06)" />`);
+      return `<text x="${pad.l - 10}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.75)" font-size="12">${escapeHtml(t)}</text>`;
+    })
+    .join("");
+
+  const dots = points
+    .map((p) => {
+      const j = jitter(p.team);
+      const x = Math.max(pad.l, Math.min(w - pad.r, xOf(p.epa) + j * 9));
+      const y = Math.max(pad.t, Math.min(h - pad.b, yOf(p.tier) + j * 7));
+      const title = `${p.team}`;
+      return `
+        <a xlink:href="#team=${encodeURIComponent(p.team)}">
+          <circle cx="${x}" cy="${y}" r="5" fill="rgba(126,231,135,0.85)" stroke="rgba(0,0,0,0.35)" stroke-width="1">
+            <title>${escapeHtml(title)}</title>
+            <desc data-team="${escapeHtml(p.team)}" data-name="${escapeHtml(p.name)}" data-epa="${escapeHtml(formatNumber(p.epa))}" data-tier="${escapeHtml(p.tier)}"></desc>
+          </circle>
+        </a>
+      `;
+    })
+    .join("");
+
+  dotCard.append(
+    el("div", {
+      html: `<svg class="viz-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="EPA vs Tier scatter">
+        <rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${plotH}" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
+        ${grid.join("")}
+        ${yLabels}
+        <text x="${w / 2}" y="${h - 10}" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="12">EPA</text>
+        <text x="16" y="${h / 2}" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="12" transform="rotate(-90 16 ${h / 2})">Tier</text>
+        ${dots}
+      </svg>`,
+    })
+  );
+  dotCard.style.position = "relative";
+  const tooltip = el("div", { class: "dot-tooltip", style: "display:none" });
+  dotCard.append(tooltip);
+
+  const updateTooltip = (evt, data) => {
+    tooltip.innerHTML = `
+      <div><b>${escapeHtml(data.team)}</b>${data.name ? ` · ${escapeHtml(data.name)}` : ""}</div>
+      <div class="muted">EPA: <b>${escapeHtml(data.epa)}</b> · Tier: <b>${escapeHtml(data.tier)}</b></div>
+    `;
+    tooltip.style.display = "block";
+    const rect = dotCard.getBoundingClientRect();
+    const x = Math.min(rect.width - 16, Math.max(8, evt.clientX - rect.left + 12));
+    const y = Math.min(rect.height - 16, Math.max(8, evt.clientY - rect.top + 12));
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+    tooltip.style.transform = "translate(0, 0)";
+  };
+
+  const hideTooltip = () => {
+    tooltip.style.display = "none";
+  };
+
+  // Attach hover tooltip for dots.
+  dotCard.querySelectorAll("circle").forEach((circle) => {
+    const desc = circle.querySelector("desc");
+    if (!desc) return;
+    const data = {
+      team: desc.getAttribute("data-team") || "",
+      name: desc.getAttribute("data-name") || "",
+      epa: desc.getAttribute("data-epa") || "",
+      tier: desc.getAttribute("data-tier") || "",
+    };
+    circle.addEventListener("mousemove", (e) => updateTooltip(e, data));
+    circle.addEventListener("mouseenter", (e) => updateTooltip(e, data));
+    circle.addEventListener("mouseleave", hideTooltip);
+  });
+
+  // ---- Chart 2: Tier distribution ----
+  const counts = new Map();
+  for (const p of points) counts.set(p.tier, (counts.get(p.tier) || 0) + 1);
+  const distTiers = [...counts.keys()].sort((a, b) => tierRankValue(a) - tierRankValue(b));
+  const maxCount = Math.max(...distTiers.map((t) => counts.get(t) || 0), 1);
+
+  const distCard = el("div", { class: "viz-card" }, [
+    el("div", { class: "viz-title", html: "Tier 分布" }),
+    el("div", { class: "viz-sub", html: "每个 Tier 的队伍数量" }),
+  ]);
+
+  const dw = 780;
+  const dh = 560;
+  const dpad = { l: 36, r: 16, t: 18, b: 62 };
+  const dPlotW = dw - dpad.l - dpad.r;
+  const dPlotH = dh - dpad.t - dpad.b;
+  const barW = distTiers.length ? dPlotW / distTiers.length : dPlotW;
+
+  const bars = distTiers
+    .map((t, idx) => {
+      const c = counts.get(t) || 0;
+      const bh = (c / maxCount) * dPlotH;
+      const x = dpad.l + idx * barW + Math.max(1, barW * 0.15);
+      const y = dpad.t + (dPlotH - bh);
+      const wBar = Math.max(2, barW * 0.7);
+      return `
+        <rect x="${x}" y="${y}" width="${wBar}" height="${bh}" fill="rgba(79,168,255,0.75)">
+          <title>${escapeHtml(t)}: ${c}</title>
+        </rect>
+        <text x="${x + wBar / 2}" y="${dh - 30}" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-size="12">${escapeHtml(t)}</text>
+      `;
+    })
+    .join("");
+
+  distCard.append(
+    el("div", {
+      html: `<svg class="viz-svg" viewBox="0 0 ${dw} ${dh}" role="img" aria-label="Tier distribution">
+        <rect x="${dpad.l}" y="${dpad.t}" width="${dPlotW}" height="${dPlotH}" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
+        ${bars}
+        <text x="${dw / 2}" y="${dh - 10}" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="12">Tier</text>
+        <text x="14" y="${dh / 2}" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="12" transform="rotate(-90 14 ${dh / 2})">Count</text>
+      </svg>`,
+    })
+  );
+
+  viz.append(state.viz.mode === "dist" ? distCard : dotCard);
+}
+
+function renderTable() {
+  const table = $("#teamsTable");
+  table.innerHTML = "";
+  const teamCol = state.teamCol;
+  if (!teamCol) return;
+  if (!state.rows.length) {
+    table.append(
+      el("tbody", {}, [
+        el("tr", {}, [
+          el("td", {
+            html: `还没有数据。请到“导入”页粘贴表格或导入 CSV。`,
+          }),
+        ]),
+      ])
+    );
+    return;
+  }
+
+  const q = (state.table.query || "").trim().toLowerCase();
+  const nameCol =
+    state.cols.find((c) => normalizeColName(c) === "team name" || normalizeColName(c) === "teamname") || "Team Name";
+  const epaCol = state.cols.find((c) => normalizeColName(c) === "epa") || "EPA";
+  const tierCol = state.cols.find(
+    (c) => normalizeColName(c) === "tier" || c.includes("排行") || normalizeColName(c).includes("t0-4")
+  );
+
+  const showCols = [teamCol, nameCol, epaCol, ...(tierCol ? [tierCol] : []), "Rank"];
+
+  const rows = state.rows
+    .filter((r) => {
+      if (!q) return true;
+      const team = String(r[teamCol] ?? "").toLowerCase();
+      if (team.includes(q)) return true;
+      for (const c of state.cols) {
+        const v = r[c];
+        if (v == null) continue;
+        const s = String(v).toLowerCase();
+        if (s.includes(q)) return true;
+      }
+      return false;
+    })
+    .map((r) => {
+      const team = String(r[teamCol] ?? "").trim();
+      return { ...r, Rank: state.stats.rank.get(team) ?? "" };
+    });
+
   const sortCol = state.table.sortCol;
   const dir = state.table.sortDir;
   if (sortCol) {
@@ -450,7 +704,7 @@ function renderTable() {
   const thead = el("thead");
   const trh = el("tr");
   for (const c of showCols) {
-    const label = c === "Tier" ? "T" : c;
+    const label = tierCol && c === tierCol ? "Tier" : c;
     const th = el("th", {
       html: escapeHtml(label) + (state.table.sortCol === c ? (state.table.sortDir === "asc" ? " ▲" : " ▼") : ""),
       onclick: () => {
@@ -480,6 +734,7 @@ function renderTable() {
         continue;
       }
       if (v == null) v = "";
+      if (tierCol && c === tierCol) v = normalizeTierDisplay(v);
       tr.append(el("td", { html: escapeHtml(v) }));
     }
     tbody.append(tr);
@@ -509,7 +764,7 @@ function renderTeam(teamId) {
   const teamTitle = teamName ? `${team} · ${teamName}` : team;
   const score = state.stats.score.get(team) ?? "";
   const rank = state.stats.rank.get(team) ?? "";
-  const tier = String(row.Tier ?? row["排行（t0-4）"] ?? "").trim() || "-";
+  const tier = normalizeTierDisplay(row.Tier ?? row["排行（t0-4）"]) || "-";
   const canTrench = String(row["Can Trench"] ?? row["能否过trench"] ?? "").trim() || "-";
 
   const statsPane = el("div", { class: "pane" }, [
@@ -519,6 +774,18 @@ function renderTeam(teamId) {
       el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "排名（按评分）" }), el("div", { class: "stat-v", html: `${escapeHtml(rank)}` })]),
       el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "Tier" }), el("div", { class: "stat-v", html: escapeHtml(tier) })]),
       el("div", { class: "stat" }, [el("div", { class: "stat-k", html: "是否能过 Trench" }), el("div", { class: "stat-v", html: escapeHtml(canTrench) })]),
+    ]),
+  ]);
+
+  const tbaPane = el("div", { class: "pane" }, [
+    el("div", { class: "pane-title", html: "过往战绩（TBA 资格赛排名）" }),
+    el("div", { class: "toolbar" }, [
+      el("input", { id: "tbaYear", class: "input", type: "number", value: String(new Date().getFullYear()), min: "1992", max: "2100" }),
+      el("button", { class: "btn", html: "查询", onclick: () => loadTbaQualRanks(team) }),
+      el("div", { class: "spacer" }),
+    ]),
+    el("div", { id: "tbaResults", class: "muted" }, [
+      document.createTextNode(state.tba.key ? "点击“查询”获取数据。" : "在“导入”页填入 TBA Key 后可查询。"),
     ]),
   ]);
 
@@ -580,7 +847,7 @@ function renderTeam(teamId) {
   rawTable.append(thead, tbody);
   const rawPane = el("div", { class: "pane" }, [el("div", { class: "pane-title", html: "原始数据" }), el("div", { class: "scroll" }, [rawTable])]);
 
-  panel.append(statsPane, insightPane, analysisPane, rawPane);
+  panel.append(statsPane, tbaPane, insightPane, analysisPane, rawPane);
 
   btnAdd.onclick = () => {
     addCompare(team);
@@ -602,6 +869,116 @@ function removeCompare(teamId) {
   state.compare.delete(String(teamId));
   renderCompareChips();
   renderComparePanel();
+}
+
+async function tbaFetchJson(path) {
+  const base = String(state.tba.proxyBase || "").trim();
+  const url = base
+    ? `${base.replace(/\/$/, "")}/api/tba?path=${encodeURIComponent(path)}`
+    : `https://www.thebluealliance.com/api/v3${path}`;
+  const cached = state.tba.cache.get(url);
+  if (cached) return cached;
+  const headers = {};
+  if (state.tba.key) {
+    if (base) headers["x-tba-auth-key"] = state.tba.key;
+    else headers["X-TBA-Auth-Key"] = state.tba.key;
+  }
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(`TBA HTTP ${res.status}`);
+  const data = await res.json();
+  state.tba.cache.set(url, data);
+  return data;
+}
+
+function pickQualRank(status) {
+  const rank =
+    status?.qual?.ranking?.rank ??
+    status?.qual?.ranking?.ranking ??
+    status?.qual?.rank ??
+    status?.qual_rank ??
+    status?.ranking?.rank ??
+    null;
+  return Number.isFinite(Number(rank)) ? Number(rank) : null;
+}
+
+function pickPlayoffResult(status) {
+  const playoff = status?.playoff;
+  if (!playoff) return null;
+
+  const level = String(playoff?.level || "").toLowerCase(); // f/sf/qf/ef...
+  const st = String(playoff?.status || "").toLowerCase(); // won/eliminated/...
+
+  if (level === "f") {
+    if (st === "won") return "冠军";
+    if (st === "eliminated") return "亚军";
+    return "决赛";
+  }
+  if (level === "sf") return "四强";
+  if (level === "qf") return "八强";
+  if (level === "ef") return "十六强";
+  if (level === "of") return "三十二强";
+
+  // fallback: if they have a playoff object but unknown encoding
+  return "季后赛";
+}
+
+async function loadTbaQualRanks(teamNumber) {
+  const out = $("#tbaResults");
+  if (!out) return;
+
+  const year = Number(($("#tbaYear")?.value || "").trim());
+  if (!Number.isFinite(year) || year < 1992) {
+    out.textContent = "年份不正确。";
+    return;
+  }
+  if (!state.tba.key) {
+    out.textContent = "请先在“导入”页填入 TBA Read API Key。";
+    return;
+  }
+
+  out.textContent = "查询中…";
+  try {
+    const teamKey = `frc${teamNumber}`;
+    const events = await tbaFetchJson(`/team/${teamKey}/events/${year}/simple`);
+    if (!Array.isArray(events) || !events.length) {
+      out.textContent = `该队在 ${year} 没有赛事记录（或 TBA 暂无数据）。`;
+      return;
+    }
+
+    const results = [];
+    for (const ev of events) {
+      const key = ev?.key;
+      if (!key) continue;
+      let qualRank = null;
+      let playoff = null;
+      try {
+        const status = await tbaFetchJson(`/team/${teamKey}/event/${key}/status`);
+        qualRank = pickQualRank(status);
+        playoff = pickPlayoffResult(status);
+      } catch {
+        // ignore per-event failures
+      }
+      results.push({
+        key,
+        name: ev?.short_name || ev?.name || key,
+        qualRank,
+        playoff,
+      });
+    }
+
+    results.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    out.innerHTML = results
+      .map((r) => {
+        const q = r.qualRank != null ? `资格赛：<b>${escapeHtml(String(r.qualRank))}</b>` : `资格赛：<b>—</b>`;
+        const p = r.playoff ? `，淘汰赛：<b>${escapeHtml(String(r.playoff))}</b>` : "";
+        return `<div>${escapeHtml(r.name)}：${q}${p}</div>`;
+      })
+      .join("");
+  } catch (e) {
+    out.textContent =
+      `查询失败：${String(e?.message || e)}。` +
+      `如果提示 CORS，被浏览器拦截了：请在“导入”页填写 TBA 本地代理地址（运行仓库内 tba-proxy.mjs）。`;
+  }
 }
 
 function renderCompareChips() {
@@ -716,7 +1093,7 @@ async function loadDataFromPath() {
   const res = await fetch(path, { cache: "no-store" });
   if (!res.ok) throw new Error(`data HTTP ${res.status}: ${path}`);
   const text = await res.text();
-  const grid = parseCSV(text);
+  const grid = parseCSV(text, detectDelimiter(text));
   return rowsFromGrid(grid);
 }
 
@@ -742,6 +1119,19 @@ function setModel({ rows, cols }) {
   updateRankModeButton();
 }
 
+function clearModel() {
+  state.rows = [];
+  state.cols = [];
+  state.teamCol = null;
+  state.numericCols = [];
+  state.stats.min.clear();
+  state.stats.max.clear();
+  state.stats.score.clear();
+  state.stats.rank.clear();
+  state.stats.epaRank.clear();
+  state.stats.tierRank.clear();
+}
+
 function wireUI() {
   $("#tableSearch").addEventListener("input", (e) => {
     state.table.query = e.target.value || "";
@@ -756,7 +1146,16 @@ function wireUI() {
     onRoute();
   });
   $("#btnReload").addEventListener("click", async () => {
-    await boot({ force: true });
+    // In import-only mode, treat reload as clearing the current session data.
+    clearModel();
+    state.import.replaced = false;
+    showStatus("已清空当前数据。请到“导入”页重新粘贴/导入。");
+    onRoute();
+  });
+  $("#btnVizToggle")?.addEventListener("click", () => {
+    state.viz.mode = state.viz.mode === "scatter" ? "dist" : "scatter";
+    updateVizToggleButton();
+    renderViz();
   });
   $("#btnGoTeam").addEventListener("click", () => {
     const team = ($("#teamQuery").value || "").trim();
@@ -791,16 +1190,51 @@ function wireUI() {
     }
   });
 
+  $("#btnPasteClipboard").addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      $("#clipboardCsv").value = text || "";
+      showStatus(text ? "已从剪贴板粘贴 CSV。" : "剪贴板为空。");
+      setTimeout(() => showStatus(""), 1200);
+    } catch {
+      showStatus("读取剪贴板失败：浏览器不允许。请手动粘贴到文本框。");
+    }
+  });
+
+  $("#btnLoadClipboard").addEventListener("click", () => {
+    const text = ($("#clipboardCsv").value || "").trim();
+    if (!text) {
+      showStatus("请先粘贴 CSV 内容。");
+      return;
+    }
+    const grid = parseCSV(text, detectDelimiter(text));
+    const model = rowsFromGrid(grid);
+    setModel(model);
+    state.import.replaced = true;
+    showStatus(`已从剪贴板载入（${model.rows.length} 行）`);
+    onRoute();
+  });
+
   $("#fileInput").addEventListener("change", async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
     const text = await f.text();
-    const grid = parseCSV(text);
+    const grid = parseCSV(text, detectDelimiter(text));
     const model = rowsFromGrid(grid);
     setModel(model);
-    showStatus(`已从上传文件载入：${f.name}（${model.rows.length} 行）`);
-    // Re-render current view
+    state.import.replaced = true;
+    showStatus(`已从 CSV 文件载入：${f.name}（${model.rows.length} 行）`);
     onRoute();
+  });
+
+  $("#tbaKey")?.addEventListener("input", (e) => {
+    state.tba.key = String(e.target.value || "").trim();
+    state.tba.cache.clear();
+  });
+
+  $("#tbaProxy")?.addEventListener("input", (e) => {
+    state.tba.proxyBase = String(e.target.value || "").trim();
+    state.tba.cache.clear();
   });
 
   window.addEventListener("hashchange", onRoute);
@@ -812,12 +1246,19 @@ function updateRankModeButton() {
   button.textContent = state.table.rankMode === "tier" ? "Tier Rank" : "EPA Rank";
 }
 
+function updateVizToggleButton() {
+  const button = $("#btnVizToggle");
+  if (!button) return;
+  button.textContent = state.viz.mode === "dist" ? "切换到 Dot Graph" : "切换到 Tier 分布";
+}
+
 function onRoute() {
   const r = parseHash();
   showView(r.view);
 
   $("#viewTable").hidden = false; // ensure sections exist for render calls below
   $("#viewOverview").hidden = false;
+  $("#viewViz").hidden = false;
   $("#viewTeam").hidden = false;
   $("#viewCompare").hidden = false;
   $("#viewImport").hidden = false;
@@ -828,10 +1269,26 @@ function onRoute() {
     for (const t of r.compare) addCompare(t);
   }
 
+  // Import mode: hide existing data until user loads new content.
+  if (r.view === "import") {
+    // Hide any currently loaded data while testing imports.
+    if (!state.import.replaced && state.rows.length) {
+      if (!state.import.backup) state.import.backup = { rows: state.rows, cols: state.cols };
+      state.import.active = true;
+      clearModel();
+      showStatus("已进入导入模式：旧数据已暂时隐藏。粘贴/导入后会立即更新本页数据（不写入磁盘）。");
+    } else {
+      state.import.active = true;
+    }
+  }
+
   if (r.view === "overview") {
     renderOverview();
   } else if (r.view === "table") {
     renderTable();
+  } else if (r.view === "viz") {
+    updateVizToggleButton();
+    renderViz();
   } else if (r.view === "team") {
     if (r.team != null) $("#teamQuery").value = r.team;
     renderTeam(r.team);
@@ -851,29 +1308,15 @@ async function boot({ force = false } = {}) {
   await loadConfig();
   await loadSamplePreview();
 
-  try {
-    const model = await loadDataFromPath();
-    setModel(model);
-    $("#viewTable").hidden = false;
-    $("#viewOverview").hidden = false;
-    $("#viewTeam").hidden = false;
-    $("#viewCompare").hidden = false;
-    $("#viewImport").hidden = false;
-    if (state.rows.length) {
-      showStatus(`已加载：${state.source.label}（${state.rows.length} 行，队号列：${state.teamCol}）`);
-    } else {
-      showStatus(`已加载空模板：${state.source.label}。请从腾讯文档导出 CSV 后覆盖这个文件。`);
-    }
-  } catch (err) {
-    // If opened via file://, fetch will often fail. Provide a clear hint.
-    const hint =
-      location.protocol === "file:"
-        ? "你正在用 file:// 打开页面，浏览器会拦截 fetch。本地预览请用本地静态服务器（或直接部署到 GitHub Pages）。"
-        : "请确认 `config.json` 的 dataPath 指向可访问的 CSV。";
-    showStatus(`数据加载失败：${String(err?.message || err)}。${hint}`);
-    // Still show import view so user can upload CSV.
-    showView("import");
-  }
+  // Do not auto-load on startup: only show the current pasted/imported dataset.
+  clearModel();
+  state.source = { kind: "import", label: "未导入" };
+  $("#viewTable").hidden = false;
+  $("#viewOverview").hidden = false;
+  $("#viewTeam").hidden = false;
+  $("#viewCompare").hidden = false;
+  $("#viewImport").hidden = false;
+  showStatus("未载入数据：请到“导入”页粘贴表格或导入 CSV（本次浏览器会话生效）。");
 
   if (force) {
     const r = parseHash();

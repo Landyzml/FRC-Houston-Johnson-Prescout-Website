@@ -8,18 +8,24 @@
 
 ## 快速开始
 
-1) 准备数据
-- 在腾讯文档中把表格 **导出为 CSV**
-- 用导出的真实文件覆盖 `data/prescout.csv`（`data/prescout.sample.csv` 只是示例，不会自动代表你的腾讯文档数据）
-
-2) 打开网页
+1) 打开网页
 - 推荐用本地静态服务器打开，例如：`python3 -m http.server 8000`
 - 浏览器访问 `http://localhost:8000`
 
-3) 部署到 GitHub
-- 把整个项目 push 到 GitHub 仓库
-- 在仓库 Settings → Pages 中选择部署分支（通常是 `main` / root）
-- 之后更新 `data/prescout.csv` 并 push，即可更新网站数据
+2) 导入数据
+- 打开页面的“导入”页：支持粘贴腾讯文档表格（TSV/CSV）或导入 CSV 文件
+- 导入后会立刻更新（仅当前浏览器会话生效，不会写入磁盘）
+
+## The Blue Alliance（可选）
+
+队伍详情页支持查询 TBA 的赛事资格赛排名（Qualification Rank）。
+
+两种用法：
+- 直接在“导入”页输入 `TBA Read API Key`（仅保存在内存里）
+- 或运行本地代理避免 CORS / 避免前端输入 Key：
+  - 如果你有 Node：`TBA_KEY=... node ./tba-proxy.mjs`
+  - 如果你没有 Node：`TBA_KEY=... python3 ./tba-proxy.py`
+  - 然后在页面里填写代理地址 `http://localhost:8787`
 
 ## 配置
 

@@ -18,7 +18,8 @@
 
       <nav class="nav" aria-label="Primary">
         <a class="nav-link" href="#overview">概览</a>
-        <a class="nav-link" href="#table">表格</a>
+        <a class="nav-link" href="#table">总表</a>
+        <a class="nav-link" href="#viz">表格</a>
         <a class="nav-link" href="#team">队伍</a>
         <a class="nav-link" href="#compare">对比</a>
         <a class="nav-link" href="#import">导入</a>
@@ -37,7 +38,7 @@
       </section>
 
       <section class="card" id="viewTable" hidden>
-        <div class="card-title">表格</div>
+        <div class="card-title">总表格</div>
         <div class="toolbar">
           <input id="tableSearch" class="input" type="search" placeholder="搜索队号/备注…" />
           <button id="rankMode" class="btn btn-ghost" type="button">EPA Rank</button>
@@ -50,6 +51,16 @@
         <div class="hint muted">
           提示：点击表头可排序；点击队号可进入单队详情；支持在 <code>config.json</code> 配置重点指标。
         </div>
+      </section>
+
+      <section class="card" id="viewViz" hidden>
+        <div class="card-title">表格</div>
+        <div class="toolbar">
+          <button id="btnVizToggle" class="btn btn-ghost" type="button">切换到 Tier 分布</button>
+          <div class="spacer"></div>
+        </div>
+        <div id="tableViz" class="viz-grid"></div>
+        <div class="hint muted">提示：点图上的点可打开队伍详情。</div>
       </section>
 
       <section class="card" id="viewTeam" hidden>
@@ -82,9 +93,25 @@
         </p>
         <div class="grid import-grid">
           <div class="pane">
-            <div class="pane-title">从文件上传（临时）</div>
+            <div class="pane-title">从剪贴板粘贴（临时）</div>
+            <div class="toolbar">
+              <button id="btnPasteClipboard" class="btn btn-ghost" type="button">从剪贴板粘贴</button>
+              <button id="btnLoadClipboard" class="btn" type="button">载入表格</button>
+            </div>
+            <textarea id="clipboardCsv" class="input textarea" placeholder="把腾讯文档导出的 CSV 内容直接粘贴到这里…"></textarea>
+            <div class="hint muted">仅在当前浏览器生效，不会写入磁盘。</div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">导入 CSV 文件（临时）</div>
             <input id="fileInput" class="input" type="file" accept=".csv,text/csv" />
-            <div class="hint muted">上传只在当前浏览器生效，不会写入磁盘。</div>
+            <div class="hint muted">仅在当前浏览器生效，不会写入磁盘，也不需要 push 到 GitHub。</div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">The Blue Alliance（可选）</div>
+            <input id="tbaKey" class="input" type="password" placeholder="粘贴你的 TBA Read API Key（只在本次浏览器会话使用）" />
+            <div class="hint muted">Key 会保存在内存里，不会写入文件；GitHub Pages 上不要把 Key 写进仓库。</div>
+            <input id="tbaProxy" class="input" type="text" placeholder="（可选）TBA 本地代理，例如：http://localhost:8787" style="margin-top:10px" />
+            <div class="hint muted">若浏览器提示 CORS 或不想在前端输入 Key，可运行仓库内 `tba-proxy.mjs` 并把代理地址填这里。</div>
           </div>
           <div class="pane">
             <div class="pane-title">当前配置</div>
