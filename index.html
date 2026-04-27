@@ -21,6 +21,7 @@
         <a class="nav-link" href="#table">总表</a>
         <a class="nav-link" href="#viz">表格</a>
         <a class="nav-link" href="#team">队伍</a>
+        <a class="nav-link" href="#schedule">赛程</a>
         <a class="nav-link" href="#compare">对比</a>
         <a class="nav-link" href="#import">导入</a>
       </nav>
@@ -74,6 +75,20 @@
         <div id="teamPanel" class="grid"></div>
       </section>
 
+      <section class="card" id="viewSchedule" hidden>
+        <div class="card-title">赛程</div>
+        <div class="toolbar">
+          <input id="scheduleYear" class="input" type="number" min="1992" max="2100" />
+          <button id="btnLoadEvents" class="btn" type="button">加载比赛</button>
+          <select id="scheduleEvent" class="input" disabled>
+            <option value="">先选择年份并加载比赛</option>
+          </select>
+          <input id="scheduleTeamFilter" class="input" type="search" placeholder="搜索队号，只显示该队比赛" />
+          <button id="btnLoadSchedule" class="btn btn-ghost" type="button" disabled>显示赛程</button>
+        </div>
+        <div id="schedulePanel" class="grid"></div>
+      </section>
+
       <section class="card" id="viewCompare" hidden>
         <div class="card-title">赛队对比</div>
         <div class="toolbar">
@@ -119,6 +134,27 @@
             <div class="hint muted">若浏览器提示 CORS 或不想在前端输入 Key，可运行仓库内 `tba-proxy.mjs` 并把代理地址填这里。</div>
           </div>
           <div class="pane">
+            <div class="pane-title">Supabase（可选）</div>
+            <input id="supabaseUrl" class="input" type="url" placeholder="Supabase Project URL，例如：https://xxxx.supabase.co" />
+            <input id="supabaseAnonKey" class="input" type="password" placeholder="Supabase anon public key" style="margin-top:10px" />
+            <div class="toolbar" style="margin-top:10px">
+              <input id="supabaseTable" class="input" type="text" placeholder="表名：app_settings" />
+              <input id="supabaseSettingKey" class="input" type="text" placeholder="Key 名：tba_api_key" />
+            </div>
+            <div class="toolbar" style="margin-top:10px">
+              <input id="supabaseDatasetTable" class="input" type="text" placeholder="队伍数据表：prescout_datasets" />
+              <input id="supabaseDatasetName" class="input" type="text" placeholder="数据集名称：default" />
+            </div>
+            <div class="toolbar" style="margin-top:10px">
+              <button id="btnSaveSupabase" class="btn btn-ghost" type="button">保存 Supabase 连接</button>
+              <button id="btnLoadTbaFromSupabase" class="btn" type="button">从 Supabase 读取 TBA Key</button>
+              <button id="btnSaveTbaToSupabase" class="btn btn-ghost" type="button">把当前 TBA Key 存进 Supabase</button>
+              <button id="btnSaveTeamsToSupabase" class="btn" type="button">上传当前队伍数据</button>
+              <button id="btnLoadTeamsFromSupabase" class="btn btn-ghost" type="button">读取队伍数据</button>
+            </div>
+            <div id="supabaseStatus" class="hint muted">表结构：app_settings + prescout_datasets。</div>
+          </div>
+          <div class="pane">
             <div class="pane-title">当前配置</div>
             <pre id="configPreview" class="code"></pre>
           </div>
@@ -134,6 +170,6 @@
       <div>本页面为本地静态站点：不依赖外网；支持 CSV 导入；适合赛前 prescouting。</div>
     </footer>
 
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260427-schedule-filter"></script>
   </body>
 </html>

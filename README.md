@@ -34,6 +34,26 @@
   - 如果你没有 Node：`TBA_KEY=... python3 ./tba-proxy.py`
   - 然后在页面里填写代理地址 `http://localhost:8787`
 
+## Supabase（可选）
+
+网站可以从 Supabase 读取 TBA Key，也可以保存当前导入的队伍数据。默认表结构可直接运行 `supabase-schema.sql`。
+
+```sql
+create table if not exists app_settings (
+  key text primary key,
+  value text not null
+);
+
+create table if not exists prescout_datasets (
+  name text primary key,
+  cols jsonb not null default '[]'::jsonb,
+  rows jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+```
+
+在“导入”页填写 Supabase Project URL、anon public key、表名 `app_settings`、Key 名 `tba_api_key`，然后可以把当前 TBA Key 和当前队伍数据存进去。之后网站启动时会自动从 Supabase 读取 TBA Key 和最新队伍数据。
+
 ## 配置
 
 编辑 `config.json`：

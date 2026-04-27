@@ -5,6 +5,14 @@
   "preferredMetricColumns": ["EPA"],
   "maxCompareTeams": 4,
   "topInsightCount": 3,
+  "supabase": {
+    "url": "",
+    "anonKey": "",
+    "table": "app_settings",
+    "tbaKeyName": "tba_api_key",
+    "datasetTable": "prescout_datasets",
+    "datasetName": "default"
+  },
   "ui": {
     "defaultView": "overview"
   }

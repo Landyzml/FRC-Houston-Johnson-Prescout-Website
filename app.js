@@ -8,6 +8,14 @@ const DEFAULT_CONFIG = {
   preferredMetricColumns: [],
   maxCompareTeams: 4,
   topInsightCount: 3,
+  supabase: {
+    url: "",
+    anonKey: "",
+    table: "app_settings",
+    tbaKeyName: "tba_api_key",
+    datasetTable: "prescout_datasets",
+    datasetName: "default",
+  },
   ui: { defaultView: "overview" },
 };
 
@@ -34,6 +42,14 @@ const state = {
   import: { active: false, replaced: false, backup: null },
   viz: { mode: "scatter" },
   tba: { key: "", proxyBase: "", cache: new Map() },
+  supabase: {
+    url: "",
+    anonKey: "",
+    table: "app_settings",
+    tbaKeyName: "tba_api_key",
+    datasetTable: "prescout_datasets",
+    datasetName: "default",
+  },
   stats: {
     min: new Map(),
     max: new Map(),
@@ -43,10 +59,12 @@ const state = {
     tierRank: new Map(),
   },
   table: { sortCol: "Rank", sortDir: "asc", query: "", rankMode: "epa" },
+  schedule: { events: [], matches: [], event: null },
   compare: new Set(),
 };
 
 const LS_TBA_KEY = "frc_prescout_tba_key";
+const LS_SUPABASE_CONFIG = "frc_prescout_supabase_config";
 
 function showStatus(msg) {
   const card = $("#statusCard");
@@ -70,6 +88,89 @@ function updateTbaKeyUi() {
   const saved = $("#tbaKeySaved");
   if (!saved) return;
   saved.textContent = state.tba.key ? `已保存：${maskKey(state.tba.key)}` : "未保存";
+}
+
+function hasTbaAccess() {
+  return Boolean(state.tba.key || state.tba.proxyBase);
+}
+
+function supabaseConfigFromInputs() {
+  return {
+    url: String($("#supabaseUrl")?.value || "").trim().replace(/\/$/, ""),
+    anonKey: String($("#supabaseAnonKey")?.value || "").trim(),
+    table: String($("#supabaseTable")?.value || "").trim() || "app_settings",
+    tbaKeyName: String($("#supabaseSettingKey")?.value || "").trim() || "tba_api_key",
+    datasetTable: String($("#supabaseDatasetTable")?.value || "").trim() || "prescout_datasets",
+    datasetName: String($("#supabaseDatasetName")?.value || "").trim() || "default",
+  };
+}
+
+function setSupabaseConfig(config) {
+  state.supabase = {
+    url: String(config?.url || "").trim().replace(/\/$/, ""),
+    anonKey: String(config?.anonKey || "").trim(),
+    table: String(config?.table || "app_settings").trim() || "app_settings",
+    tbaKeyName: String(config?.tbaKeyName || "tba_api_key").trim() || "tba_api_key",
+    datasetTable: String(config?.datasetTable || "prescout_datasets").trim() || "prescout_datasets",
+    datasetName: String(config?.datasetName || "default").trim() || "default",
+  };
+}
+
+function updateSupabaseUi() {
+  const cfg = state.supabase;
+  const url = $("#supabaseUrl");
+  const anonKey = $("#supabaseAnonKey");
+  const table = $("#supabaseTable");
+  const settingKey = $("#supabaseSettingKey");
+  const datasetTable = $("#supabaseDatasetTable");
+  const datasetName = $("#supabaseDatasetName");
+  const status = $("#supabaseStatus");
+  if (url) url.value = cfg.url || "";
+  if (anonKey) anonKey.value = cfg.anonKey || "";
+  if (table) table.value = cfg.table || "app_settings";
+  if (settingKey) settingKey.value = cfg.tbaKeyName || "tba_api_key";
+  if (datasetTable) datasetTable.value = cfg.datasetTable || "prescout_datasets";
+  if (datasetName) datasetName.value = cfg.datasetName || "default";
+  if (status) status.textContent = cfg.url ? `已配置 Supabase：${cfg.url}` : "表结构：app_settings(key text primary key, value text)。";
+}
+
+function saveSupabaseConfigToLocalStorage() {
+  try {
+    localStorage.setItem(LS_SUPABASE_CONFIG, JSON.stringify(state.supabase));
+  } catch {
+    // ignore
+  }
+}
+
+function loadSupabaseConfigFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(LS_SUPABASE_CONFIG);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function supabaseRestUrl(pathAndQuery = "") {
+  const base = String(state.supabase.url || "").replace(/\/$/, "");
+  return `${base}/rest/v1/${pathAndQuery}`;
+}
+
+function supabaseHeaders(extra = {}) {
+  return {
+    apikey: state.supabase.anonKey,
+    Authorization: `Bearer ${state.supabase.anonKey}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+function hasSupabaseConfig() {
+  return Boolean(state.supabase.url && state.supabase.anonKey && state.supabase.table && state.supabase.tbaKeyName);
+}
+
+function hasSupabaseDatasetConfig() {
+  return Boolean(hasSupabaseConfig() && state.supabase.datasetTable && state.supabase.datasetName);
 }
 
 function safeParseNumber(v) {
@@ -322,7 +423,7 @@ function parseHash() {
       .filter(Boolean);
     return { view, team: null, compare: list };
   }
-  if (["overview", "table", "viz", "import"].includes(view)) return { view, team: null, compare: [] };
+  if (["overview", "table", "viz", "schedule", "import"].includes(view)) return { view, team: null, compare: [] };
   return { view: "overview", team: null, compare: [] };
 }
 
@@ -339,6 +440,7 @@ function showView(viewId) {
   $("#viewTable").hidden = viewId !== "table";
   $("#viewViz").hidden = viewId !== "viz";
   $("#viewTeam").hidden = viewId !== "team";
+  $("#viewSchedule").hidden = viewId !== "schedule";
   $("#viewCompare").hidden = viewId !== "compare";
   $("#viewImport").hidden = viewId !== "import";
   setActiveNav(viewId);
@@ -904,6 +1006,155 @@ async function tbaFetchJson(path) {
   return data;
 }
 
+async function loadTbaKeyFromSupabase({ silent = false } = {}) {
+  const status = $("#supabaseStatus");
+  if (!hasSupabaseConfig()) {
+    if (!silent && status) status.textContent = "请先填写 Supabase URL、anon key、表名和 key 名。";
+    return false;
+  }
+
+  const table = encodeURIComponent(state.supabase.table);
+  const keyName = encodeURIComponent(state.supabase.tbaKeyName);
+  const url = supabaseRestUrl(`${table}?key=eq.${keyName}&select=value&limit=1`);
+  try {
+    if (!silent && status) status.textContent = "正在从 Supabase 读取 TBA Key…";
+    const res = await fetch(url, { headers: supabaseHeaders() });
+    if (!res.ok) throw new Error(`Supabase HTTP ${res.status}`);
+    const data = await res.json();
+    const key = String(data?.[0]?.value || "").trim();
+    if (!key) {
+      if (!silent && status) status.textContent = `Supabase 里没有找到 ${state.supabase.tbaKeyName}。`;
+      return false;
+    }
+    state.tba.key = key;
+    state.tba.cache.clear();
+    try {
+      localStorage.setItem(LS_TBA_KEY, key);
+    } catch {
+      // ignore
+    }
+    const input = $("#tbaKey");
+    if (input) input.value = "";
+    updateTbaKeyUi();
+    if (status) status.textContent = `已从 Supabase 读取 TBA Key：${maskKey(key)}`;
+    return true;
+  } catch (e) {
+    if (!silent && status) status.textContent = `读取失败：${String(e?.message || e)}`;
+    return false;
+  }
+}
+
+async function saveTbaKeyToSupabase() {
+  const status = $("#supabaseStatus");
+  const currentKey = String(state.tba.key || $("#tbaKey")?.value || "").trim();
+  if (!hasSupabaseConfig()) {
+    if (status) status.textContent = "请先填写并保存 Supabase 连接。";
+    return;
+  }
+  if (!currentKey) {
+    if (status) status.textContent = "请先在 TBA Key 输入框里填入 key。";
+    return;
+  }
+
+  const table = encodeURIComponent(state.supabase.table);
+  const url = supabaseRestUrl(table);
+  try {
+    if (status) status.textContent = "正在把 TBA Key 存进 Supabase…";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify({ key: state.supabase.tbaKeyName, value: currentKey }),
+    });
+    if (!res.ok) throw new Error(`Supabase HTTP ${res.status}`);
+    state.tba.key = currentKey;
+    state.tba.cache.clear();
+    try {
+      localStorage.setItem(LS_TBA_KEY, currentKey);
+    } catch {
+      // ignore
+    }
+    updateTbaKeyUi();
+    if (status) status.textContent = `已存进 Supabase：${maskKey(currentKey)}`;
+  } catch (e) {
+    if (status) status.textContent = `保存失败：${String(e?.message || e)}。请确认表有 upsert 权限。`;
+  }
+}
+
+async function saveTeamsToSupabase({ silent = false } = {}) {
+  const status = $("#supabaseStatus");
+  if (!hasSupabaseDatasetConfig()) {
+    if (!silent && status) status.textContent = "请先填写并保存 Supabase 连接。";
+    return false;
+  }
+  if (!state.rows.length || !state.cols.length) {
+    if (!silent && status) status.textContent = "当前没有队伍数据，请先粘贴表格或导入 CSV。";
+    return false;
+  }
+
+  const table = encodeURIComponent(state.supabase.datasetTable);
+  const url = supabaseRestUrl(table);
+  const payload = {
+    name: state.supabase.datasetName,
+    cols: state.cols,
+    rows: state.rows,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    if (!silent && status) status.textContent = `正在上传 ${state.rows.length} 支队伍到 Supabase…`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Supabase HTTP ${res.status}`);
+    if (status) status.textContent = `已上传队伍数据：${state.rows.length} 行，${state.cols.length} 列。`;
+    return true;
+  } catch (e) {
+    if (!silent && status) status.textContent = `上传队伍数据失败：${String(e?.message || e)}`;
+    return false;
+  }
+}
+
+async function loadTeamsFromSupabase({ silent = false } = {}) {
+  const status = $("#supabaseStatus");
+  if (!hasSupabaseDatasetConfig()) {
+    if (!silent && status) status.textContent = "请先填写并保存 Supabase 连接。";
+    return false;
+  }
+
+  const table = encodeURIComponent(state.supabase.datasetTable);
+  const name = encodeURIComponent(state.supabase.datasetName);
+  const url = supabaseRestUrl(`${table}?name=eq.${name}&select=cols,rows,updated_at&limit=1`);
+
+  try {
+    if (!silent && status) status.textContent = "正在从 Supabase 读取队伍数据…";
+    const res = await fetch(url, { headers: supabaseHeaders() });
+    if (!res.ok) throw new Error(`Supabase HTTP ${res.status}`);
+    const data = await res.json();
+    const dataset = data?.[0];
+    if (!dataset) {
+      if (!silent && status) status.textContent = `Supabase 里没有找到队伍数据：${state.supabase.datasetName}`;
+      return false;
+    }
+    const cols = Array.isArray(dataset.cols) ? dataset.cols : [];
+    const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+    if (!cols.length || !rows.length) {
+      if (!silent && status) status.textContent = "Supabase 队伍数据为空。";
+      return false;
+    }
+    setModel({ rows, cols });
+    state.import.replaced = true;
+    state.source = { kind: "supabase", label: state.supabase.datasetName };
+    if (status) status.textContent = `已读取队伍数据：${rows.length} 行，更新于 ${dataset.updated_at || "未知时间"}。`;
+    onRoute();
+    return true;
+  } catch (e) {
+    if (!silent && status) status.textContent = `读取队伍数据失败：${String(e?.message || e)}`;
+    return false;
+  }
+}
+
 function pickQualRank(status) {
   const rank =
     status?.qual?.ranking?.rank ??
@@ -936,6 +1187,239 @@ function pickPlayoffResult(status) {
   return "季后赛";
 }
 
+function teamKeyToNumber(teamKey) {
+  return String(teamKey || "").replace(/^frc/i, "");
+}
+
+function matchSortValue(match) {
+  const order = { qm: 1, ef: 2, qf: 3, sf: 4, f: 5 };
+  const level = order[String(match?.comp_level || "").toLowerCase()] || 99;
+  return level * 100000 + (Number(match?.set_number) || 0) * 1000 + (Number(match?.match_number) || 0);
+}
+
+function matchLabel(match) {
+  const level = String(match?.comp_level || "").toLowerCase();
+  const num = Number(match?.match_number) || "";
+  const set = Number(match?.set_number) || "";
+  if (level === "qm") return `资格赛 ${num}`;
+  if (level === "ef") return `十六强 ${set}-${num}`;
+  if (level === "qf") return `八强 ${set}-${num}`;
+  if (level === "sf") return `四强 ${set}-${num}`;
+  if (level === "f") return `决赛 ${num}`;
+  return `${level || "比赛"} ${num}`;
+}
+
+function allianceRows(teamKeys) {
+  return [0, 1, 2].map((i) => teamKeyToNumber(teamKeys?.[i] || ""));
+}
+
+function teamEpa(teamNumber) {
+  const row = getTeamRow(teamNumber);
+  const raw = row?.EPA ?? row?.epa ?? row?.Epa;
+  const epa = safeParseNumber(raw);
+  return epa == null ? null : epa;
+}
+
+function allianceEpaTotal(teams) {
+  const values = teams.map(teamEpa).filter((v) => v != null);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+}
+
+function formatEpa(epa) {
+  return epa == null ? "-" : formatNumber(epa);
+}
+
+function formatTeamWithEpa(teamNumber) {
+  if (!teamNumber) return "—";
+  const epa = teamEpa(teamNumber);
+  return `<a href="#team=${encodeURIComponent(teamNumber)}">${escapeHtml(teamNumber)}</a><span class="schedule-epa">EPA ${escapeHtml(formatEpa(epa))}</span>`;
+}
+
+function predictionForMatch(red, blue) {
+  const redTotal = allianceEpaTotal(red);
+  const blueTotal = allianceEpaTotal(blue);
+  if (redTotal == null || blueTotal == null || redTotal + blueTotal <= 0) {
+    return { redTotal, blueTotal, redWin: 50, blueWin: 50 };
+  }
+  const redWin = Math.round((redTotal / (redTotal + blueTotal)) * 100);
+  return { redTotal, blueTotal, redWin, blueWin: 100 - redWin };
+}
+
+function matchTeams(match) {
+  return [
+    ...allianceRows(match?.alliances?.red?.team_keys),
+    ...allianceRows(match?.alliances?.blue?.team_keys),
+  ].filter(Boolean);
+}
+
+function matchHasTeam(match, teamNumber) {
+  const target = String(teamNumber || "").trim();
+  if (!target) return true;
+  return matchTeams(match).some((team) => team === target);
+}
+
+function renderScheduleMatches() {
+  const panel = $("#schedulePanel");
+  const event = state.schedule.event;
+  const filter = String($("#scheduleTeamFilter")?.value || "").trim();
+  if (!panel) return;
+
+  const filtered = state.schedule.matches.filter((match) => matchHasTeam(match, filter));
+  if (!state.schedule.matches.length) {
+    panel.innerHTML = `<div class="pane"><div class="muted">这场比赛暂时没有赛程数据。</div></div>`;
+    return;
+  }
+  if (!filtered.length) {
+    panel.innerHTML = `<div class="pane"><div class="pane-title">${escapeHtml(event?.name || "赛程")}</div><div class="muted">没有找到队伍 ${escapeHtml(filter)} 的比赛。</div></div>`;
+    return;
+  }
+
+  const rows = filtered.map((match) => {
+    const red = allianceRows(match?.alliances?.red?.team_keys);
+    const blue = allianceRows(match?.alliances?.blue?.team_keys);
+    const time = match?.time ? new Date(Number(match.time) * 1000).toLocaleString() : "";
+    const prediction = predictionForMatch(red, blue);
+    const summaryRed = red.filter(Boolean).map(escapeHtml).join(", ") || "—";
+    const summaryBlue = blue.filter(Boolean).map(escapeHtml).join(", ") || "—";
+    const expandedRows = red.map((r, i) => {
+      const b = blue[i] || "";
+      const middle = i === 1 ? `<div class="schedule-vs">vs</div>` : `<div></div>`;
+      const redTeam = formatTeamWithEpa(r);
+      const blueTeam = formatTeamWithEpa(b);
+      return `<div class="schedule-row"><div class="schedule-red">${redTeam}</div>${middle}<div class="schedule-blue">${blueTeam}</div></div>`;
+    }).join("");
+
+    const actualScore =
+      match?.alliances?.red?.score != null && match?.alliances?.blue?.score != null
+        ? `<div class="schedule-actual">实际比分：${escapeHtml(match.alliances.red.score)} - ${escapeHtml(match.alliances.blue.score)}</div>`
+        : "";
+
+    return `<details class="schedule-match">
+      <summary>
+        <span class="schedule-match-label">${escapeHtml(matchLabel(match))}</span>
+        <span class="schedule-summary-teams"><b>${summaryRed}</b> <em>vs</em> <b>${summaryBlue}</b></span>
+        <span class="schedule-summary-time">${escapeHtml(time)}</span>
+      </summary>
+      <div class="schedule-detail">
+        <div class="schedule-detail-grid">
+          <div class="schedule-alliance-lines">
+            ${expandedRows}
+          </div>
+          <div class="schedule-predict">
+            <div class="schedule-scoreline">
+              <span>预测分：${escapeHtml(formatEpa(prediction.redTotal))}</span>
+              <b>${escapeHtml(String(prediction.redWin))}%</b>
+              <span>${escapeHtml(formatEpa(prediction.blueTotal))}：预测分</span>
+            </div>
+            <div class="schedule-prob">
+              <div class="schedule-prob-red" style="width:${prediction.redWin}%"></div>
+              <div class="schedule-prob-blue" style="width:${prediction.blueWin}%"></div>
+            </div>
+            <div class="schedule-scoreline muted">
+              <span>红方胜率</span>
+              <span></span>
+              <span>蓝方胜率 ${escapeHtml(String(prediction.blueWin))}%</span>
+            </div>
+            ${actualScore}
+          </div>
+        </div>
+      </div>
+    </details>`;
+  }).join("");
+
+  const countLabel = filter ? `（队伍 ${escapeHtml(filter)}：${filtered.length}/${state.schedule.matches.length} 场）` : `（${filtered.length} 场）`;
+  panel.innerHTML = `<div class="pane">
+    <div class="pane-title">${escapeHtml(event?.name || "赛程")} 赛程 ${countLabel}</div>
+    <div class="schedule-list">${rows}</div>
+  </div>`;
+}
+
+async function loadTbaEventsForSchedule() {
+  const panel = $("#schedulePanel");
+  const select = $("#scheduleEvent");
+  const button = $("#btnLoadSchedule");
+  if (!panel || !select || !button) return;
+
+  const year = Number(($("#scheduleYear")?.value || "").trim());
+  if (!Number.isFinite(year) || year < 1992) {
+    panel.innerHTML = `<div class="pane"><div class="muted">年份不正确。</div></div>`;
+    return;
+  }
+  if (!hasTbaAccess()) {
+    panel.innerHTML = `<div class="pane"><div class="muted">请先在“导入”页填入 TBA Read API Key，或填写 TBA 本地代理地址。</div></div>`;
+    return;
+  }
+
+  panel.innerHTML = `<div class="pane"><div class="muted">正在加载 ${year} 年比赛列表…</div></div>`;
+  select.disabled = true;
+  button.disabled = true;
+  select.innerHTML = `<option value="">加载中…</option>`;
+
+  try {
+    const events = await tbaFetchJson(`/events/${year}/simple`);
+    state.schedule.events = Array.isArray(events) ? events : [];
+    state.schedule.events.sort((a, b) => {
+      const aStart = String(a?.start_date || "");
+      const bStart = String(b?.start_date || "");
+      if (aStart !== bStart) return aStart.localeCompare(bStart);
+      return String(a?.name || "").localeCompare(String(b?.name || ""));
+    });
+
+    if (!state.schedule.events.length) {
+      select.innerHTML = `<option value="">没有找到比赛</option>`;
+      panel.innerHTML = `<div class="pane"><div class="muted">${year} 年没有可用比赛。</div></div>`;
+      return;
+    }
+
+    select.innerHTML = `<option value="">选择一场比赛</option>` + state.schedule.events
+      .map((event) => {
+        const date = event.start_date ? `${event.start_date} · ` : "";
+        const label = `${date}${event.name || event.key}`;
+        return `<option value="${escapeHtml(event.key)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+    select.disabled = false;
+    panel.innerHTML = `<div class="pane"><div class="muted">已加载 ${state.schedule.events.length} 场比赛，选择一场后点击“显示赛程”。</div></div>`;
+  } catch (e) {
+    select.innerHTML = `<option value="">加载失败</option>`;
+    panel.innerHTML = `<div class="pane"><div class="muted">加载失败：${escapeHtml(String(e?.message || e))}</div></div>`;
+  }
+}
+
+async function loadTbaEventSchedule() {
+  const panel = $("#schedulePanel");
+  const eventKey = ($("#scheduleEvent")?.value || "").trim();
+  if (!panel) return;
+  if (!eventKey) {
+    panel.innerHTML = `<div class="pane"><div class="muted">请先选择一场比赛。</div></div>`;
+    return;
+  }
+  if (!hasTbaAccess()) {
+    panel.innerHTML = `<div class="pane"><div class="muted">请先在“导入”页填入 TBA Read API Key，或填写 TBA 本地代理地址。</div></div>`;
+    return;
+  }
+
+  const event = state.schedule.events.find((e) => e.key === eventKey);
+  panel.innerHTML = `<div class="pane"><div class="muted">正在加载赛程…</div></div>`;
+
+  try {
+    const matches = await tbaFetchJson(`/event/${eventKey}/matches/simple`);
+    const sorted = (Array.isArray(matches) ? matches : []).slice().sort((a, b) => matchSortValue(a) - matchSortValue(b));
+    if (!sorted.length) {
+      state.schedule.event = event || null;
+      state.schedule.matches = [];
+      panel.innerHTML = `<div class="pane"><div class="muted">这场比赛暂时没有赛程数据。</div></div>`;
+      return;
+    }
+
+    state.schedule.event = event || { key: eventKey, name: eventKey };
+    state.schedule.matches = sorted;
+    renderScheduleMatches();
+  } catch (e) {
+    panel.innerHTML = `<div class="pane"><div class="muted">加载失败：${escapeHtml(String(e?.message || e))}</div></div>`;
+  }
+}
+
 async function loadTbaQualRanks(teamNumber) {
   const out = $("#tbaResults");
   if (!out) return;
@@ -945,8 +1429,8 @@ async function loadTbaQualRanks(teamNumber) {
     out.textContent = "年份不正确。";
     return;
   }
-  if (!state.tba.key) {
-    out.textContent = "请先在“导入”页填入 TBA Read API Key。";
+  if (!hasTbaAccess()) {
+    out.textContent = "请先在“导入”页填入 TBA Read API Key，或填写 TBA 本地代理地址。";
     return;
   }
 
@@ -1077,7 +1561,12 @@ async function loadConfig() {
     const res = await fetch("./config.json", { cache: "no-store" });
     if (!res.ok) throw new Error(`config.json HTTP ${res.status}`);
     const cfg = await res.json();
-    state.config = { ...DEFAULT_CONFIG, ...cfg, ui: { ...DEFAULT_CONFIG.ui, ...(cfg.ui || {}) } };
+    state.config = {
+      ...DEFAULT_CONFIG,
+      ...cfg,
+      supabase: { ...DEFAULT_CONFIG.supabase, ...(cfg.supabase || {}) },
+      ui: { ...DEFAULT_CONFIG.ui, ...(cfg.ui || {}) },
+    };
   } catch {
     state.config = DEFAULT_CONFIG;
   }
@@ -1171,6 +1660,19 @@ function wireUI() {
     updateVizToggleButton();
     renderViz();
   });
+  $("#scheduleYear")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#btnLoadEvents")?.click();
+  });
+  $("#btnLoadEvents")?.addEventListener("click", loadTbaEventsForSchedule);
+  $("#scheduleEvent")?.addEventListener("change", (e) => {
+    $("#btnLoadSchedule").disabled = !String(e.target.value || "").trim();
+    state.schedule.matches = [];
+    state.schedule.event = null;
+  });
+  $("#btnLoadSchedule")?.addEventListener("click", loadTbaEventSchedule);
+  $("#scheduleTeamFilter")?.addEventListener("input", () => {
+    if (state.schedule.matches.length) renderScheduleMatches();
+  });
   $("#btnGoTeam").addEventListener("click", () => {
     const team = ($("#teamQuery").value || "").trim();
     location.hash = `#team=${encodeURIComponent(team)}`;
@@ -1215,7 +1717,7 @@ function wireUI() {
     }
   });
 
-  $("#btnLoadClipboard").addEventListener("click", () => {
+  $("#btnLoadClipboard").addEventListener("click", async () => {
     const text = ($("#clipboardCsv").value || "").trim();
     if (!text) {
       showStatus("请先粘贴 CSV 内容。");
@@ -1226,6 +1728,7 @@ function wireUI() {
     setModel(model);
     state.import.replaced = true;
     showStatus(`已从剪贴板载入（${model.rows.length} 行）`);
+    if (hasSupabaseDatasetConfig()) await saveTeamsToSupabase({ silent: true });
     onRoute();
   });
 
@@ -1238,6 +1741,7 @@ function wireUI() {
     setModel(model);
     state.import.replaced = true;
     showStatus(`已从 CSV 文件载入：${f.name}（${model.rows.length} 行）`);
+    if (hasSupabaseDatasetConfig()) await saveTeamsToSupabase({ silent: true });
     onRoute();
   });
 
@@ -1273,6 +1777,42 @@ function wireUI() {
     setTimeout(() => showStatus(""), 1200);
   });
 
+  $("#btnSaveSupabase")?.addEventListener("click", () => {
+    setSupabaseConfig(supabaseConfigFromInputs());
+    saveSupabaseConfigToLocalStorage();
+    updateSupabaseUi();
+    showStatus("已保存 Supabase 连接到本机浏览器。");
+    setTimeout(() => showStatus(""), 1200);
+  });
+
+  $("#btnLoadTbaFromSupabase")?.addEventListener("click", () => {
+    setSupabaseConfig(supabaseConfigFromInputs());
+    saveSupabaseConfigToLocalStorage();
+    updateSupabaseUi();
+    loadTbaKeyFromSupabase();
+  });
+
+  $("#btnSaveTbaToSupabase")?.addEventListener("click", () => {
+    setSupabaseConfig(supabaseConfigFromInputs());
+    saveSupabaseConfigToLocalStorage();
+    updateSupabaseUi();
+    saveTbaKeyToSupabase();
+  });
+
+  $("#btnSaveTeamsToSupabase")?.addEventListener("click", () => {
+    setSupabaseConfig(supabaseConfigFromInputs());
+    saveSupabaseConfigToLocalStorage();
+    updateSupabaseUi();
+    saveTeamsToSupabase();
+  });
+
+  $("#btnLoadTeamsFromSupabase")?.addEventListener("click", () => {
+    setSupabaseConfig(supabaseConfigFromInputs());
+    saveSupabaseConfigToLocalStorage();
+    updateSupabaseUi();
+    loadTeamsFromSupabase();
+  });
+
   window.addEventListener("hashchange", onRoute);
 }
 
@@ -1296,6 +1836,7 @@ function onRoute() {
   $("#viewOverview").hidden = false;
   $("#viewViz").hidden = false;
   $("#viewTeam").hidden = false;
+  $("#viewSchedule").hidden = false;
   $("#viewCompare").hidden = false;
   $("#viewImport").hidden = false;
 
@@ -1328,6 +1869,11 @@ function onRoute() {
   } else if (r.view === "team") {
     if (r.team != null) $("#teamQuery").value = r.team;
     renderTeam(r.team);
+  } else if (r.view === "schedule") {
+    if (!$("#scheduleYear").value) $("#scheduleYear").value = String(new Date().getFullYear());
+    if (!$("#schedulePanel").children.length) {
+      $("#schedulePanel").innerHTML = `<div class="pane"><div class="muted">选择年份并加载比赛列表。</div></div>`;
+    }
   } else if (r.view === "compare") {
     renderCompareChips();
     renderComparePanel();
@@ -1344,6 +1890,10 @@ async function boot({ force = false } = {}) {
   await loadConfig();
   await loadSamplePreview();
 
+  const storedSupabase = loadSupabaseConfigFromLocalStorage();
+  setSupabaseConfig(storedSupabase || state.config.supabase || DEFAULT_CONFIG.supabase);
+  updateSupabaseUi();
+
   // Restore TBA key from localStorage (best-effort; not secure).
   try {
     const stored = localStorage.getItem(LS_TBA_KEY) || "";
@@ -1352,6 +1902,7 @@ async function boot({ force = false } = {}) {
     // ignore
   }
   updateTbaKeyUi();
+  if (hasSupabaseConfig()) await loadTbaKeyFromSupabase({ silent: true });
 
   // Do not auto-load on startup: only show the current pasted/imported dataset.
   clearModel();
@@ -1359,9 +1910,11 @@ async function boot({ force = false } = {}) {
   $("#viewTable").hidden = false;
   $("#viewOverview").hidden = false;
   $("#viewTeam").hidden = false;
+  $("#viewSchedule").hidden = false;
   $("#viewCompare").hidden = false;
   $("#viewImport").hidden = false;
   showStatus("未载入数据：请到“导入”页粘贴表格或导入 CSV（本次浏览器会话生效）。");
+  if (hasSupabaseDatasetConfig()) await loadTeamsFromSupabase({ silent: true });
 
   if (force) {
     const r = parseHash();
