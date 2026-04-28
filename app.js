@@ -8,6 +8,13 @@ const DEFAULT_CONFIG = {
   preferredMetricColumns: [],
   maxCompareTeams: 4,
   topInsightCount: 3,
+  tba: {
+    // If set, the app will call your proxy (recommended) and users won't need to enter a TBA key.
+    // Example: "https://your-worker.example.com"
+    // If you put a raw key here, the site will work without user input, but the key will be public.
+    key: "",
+    proxyBase: "",
+  },
   supabase: {
     url: "",
     anonKey: "",
@@ -98,7 +105,11 @@ function maskKey(key) {
 function updateTbaKeyUi() {
   const saved = $("#tbaKeySaved");
   if (!saved) return;
-  saved.textContent = state.tba.key ? `已保存：${maskKey(state.tba.key)}` : "未保存";
+  saved.textContent = state.tba.proxyBase
+    ? "已启用：TBA 代理"
+    : state.tba.key
+      ? `已保存：${maskKey(state.tba.key)}`
+      : "未保存";
 }
 
 function hasTbaAccess() {
@@ -176,6 +187,14 @@ function loadSupabaseConfigFromLocalStorage() {
   } catch {
     return null;
   }
+}
+
+function mergeSupabaseConfig(base, override) {
+  const merged = { ...(base || {}) };
+  for (const [key, value] of Object.entries(override || {})) {
+    if (String(value ?? "").trim()) merged[key] = value;
+  }
+  return merged;
 }
 
 function supabaseRestUrl(pathAndQuery = "") {
@@ -2116,6 +2135,7 @@ async function loadConfig() {
     state.config = {
       ...DEFAULT_CONFIG,
       ...cfg,
+      tba: { ...DEFAULT_CONFIG.tba, ...(cfg.tba || {}) },
       supabase: { ...DEFAULT_CONFIG.supabase, ...(cfg.supabase || {}) },
       ui: { ...DEFAULT_CONFIG.ui, ...(cfg.ui || {}) },
     };
@@ -2469,14 +2489,20 @@ async function boot({ force = false } = {}) {
   await loadConfig();
   await loadSamplePreview();
 
+  // Load TBA proxy base from config (preferred) before touching localStorage key.
+  state.tba.proxyBase = String(state.config?.tba?.proxyBase || "").trim();
+  const bundledTbaKey = String(state.config?.tba?.key || "").trim();
+
   const storedSupabase = loadSupabaseConfigFromLocalStorage();
-  setSupabaseConfig(storedSupabase || state.config.supabase || DEFAULT_CONFIG.supabase);
+  const bundledSupabase = mergeSupabaseConfig(DEFAULT_CONFIG.supabase, state.config.supabase);
+  setSupabaseConfig(mergeSupabaseConfig(bundledSupabase, storedSupabase));
   updateSupabaseUi();
 
   // Restore TBA key from localStorage (best-effort; not secure).
   try {
     const stored = localStorage.getItem(LS_TBA_KEY) || "";
-    state.tba.key = stored.trim();
+    // If a proxy is configured, don't auto-load a local key unless user explicitly types one.
+    state.tba.key = bundledTbaKey || (state.tba.proxyBase ? "" : stored.trim());
   } catch {
     // ignore
   }

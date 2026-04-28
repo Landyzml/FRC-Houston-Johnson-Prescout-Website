@@ -5,9 +5,13 @@
   "preferredMetricColumns": ["EPA"],
   "maxCompareTeams": 4,
   "topInsightCount": 3,
+  "tba": {
+    "key": "",
+    "proxyBase": ""
+  },
   "supabase": {
-    "url": "",
-    "anonKey": "",
+    "url": "https://jwgdrqynbdbwbthiushu.supabase.co",
+    "anonKey": "sb_publishable_M7s0Jc0b74t6DSSJz5vYBg_9EOn8MxQ",
     "table": "app_settings",
     "tbaKeyName": "tba_api_key",
     "datasetTable": "prescout_datasets",

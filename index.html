@@ -134,7 +134,7 @@
             <div class="hint muted">若浏览器提示 CORS 或不想在前端输入 Key，可运行仓库内 `tba-proxy.mjs` 并把代理地址填这里。</div>
           </div>
           <div class="pane">
-            <div class="pane-title">Supabase（可选）</div>
+            <div class="pane-title">Supabase（已内置）</div>
             <input id="supabaseUrl" class="input" type="url" placeholder="Supabase Project URL，例如：https://xxxx.supabase.co" />
             <input id="supabaseAnonKey" class="input" type="password" placeholder="Supabase anon public key" style="margin-top:10px" />
             <div class="toolbar" style="margin-top:10px">
@@ -152,7 +152,7 @@
               <button id="btnSaveTeamsToSupabase" class="btn" type="button" disabled>上传当前队伍数据</button>
               <button id="btnLoadTeamsFromSupabase" class="btn btn-ghost" type="button">读取队伍数据</button>
             </div>
-            <div id="supabaseStatus" class="hint muted">导入 CSV 后可选择是否上传到 Supabase。</div>
+            <div id="supabaseStatus" class="hint muted">默认会使用内置 Supabase 连接；导入 CSV 后可选择上传。</div>
           </div>
           <div class="pane">
             <div class="pane-title">当前配置</div>
@@ -170,6 +170,6 @@
       <div>本页面为本地静态站点：不依赖外网；支持 CSV 导入；适合赛前 prescouting。</div>
     </footer>
 
-    <script type="module" src="./app.js?v=20260428-supabase-init-msg"></script>
+    <script type="module" src="./app.js?v=20260429-bundled-supabase"></script>
   </body>
 </html>

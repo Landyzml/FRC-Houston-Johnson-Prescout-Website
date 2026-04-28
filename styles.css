@@ -27,26 +27,26 @@ body {
   color: var(--text);
   font-family: var(--sans);
   background:
-    radial-gradient(1200px 700px at 10% 10%, rgba(255, 209, 102, 0.20), transparent 55%),
-    radial-gradient(900px 620px at 85% 18%, rgba(6, 214, 160, 0.18), transparent 60%),
-    radial-gradient(920px 720px at 50% 110%, rgba(239, 71, 111, 0.14), transparent 60%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
-  background-size: 180% 180%, 165% 165%, 185% 185%, 100% 100%;
-  background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
-  background-repeat: repeat;
-  animation: bg-loop 26s ease-in-out infinite;
+    radial-gradient(circle at 18% 12%, rgba(255, 209, 102, 0.22), transparent 30vw),
+    radial-gradient(circle at 82% 18%, rgba(6, 214, 160, 0.18), transparent 28vw),
+    radial-gradient(circle at 54% 92%, rgba(239, 71, 111, 0.14), transparent 34vw),
+    linear-gradient(145deg, #070b18 0%, var(--bg0) 42%, var(--bg1) 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100%;
+  overflow-x: hidden;
 }
 
-@keyframes bg-loop {
-  0% {
-    background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
-  }
-  50% {
-    background-position: 100% 100%, 0% 80%, 40% 0%, 0 0;
-  }
-  100% {
-    background-position: 0% 0%, 100% 0%, 50% 100%, 0 0;
-  }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.035), transparent 34%),
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.055), transparent 46%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.55));
 }
 
 @media (prefers-reduced-motion: reduce) {
