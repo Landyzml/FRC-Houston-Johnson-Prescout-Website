@@ -11,7 +11,9 @@
     "table": "app_settings",
     "tbaKeyName": "tba_api_key",
     "datasetTable": "prescout_datasets",
-    "datasetName": "default"
+    "datasetName": "default",
+    "teamTable": "prescout_teams",
+    "statboticsTable": "statbotics_event_matches"
   },
   "ui": {
     "defaultView": "overview"

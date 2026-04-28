@@ -50,9 +50,22 @@ create table if not exists prescout_datasets (
   rows jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+create table if not exists prescout_teams (
+  team_number text primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists statbotics_event_matches (
+  event_key text primary key,
+  matches jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
 ```
 
-在“导入”页填写 Supabase Project URL、anon public key、表名 `app_settings`、Key 名 `tba_api_key`，然后可以把当前 TBA Key 和当前队伍数据存进去。之后网站启动时会自动从 Supabase 读取 TBA Key 和最新队伍数据。
+在“导入”页填写 Supabase Project URL、anon public key、表名 `app_settings`、Key 名 `tba_api_key`，然后可以把当前 TBA Key 和当前队伍数据存进去。队伍数据会按 `team_number` 逐队保存到 `prescout_teams`，新 CSV 里同队号会覆盖旧信息；网站启动时会自动读取这些队伍。
+赛程页会优先调用 Statbotics 的比赛预测数据，并把每个 event 的 Statbotics match 数据缓存到 `statbotics_event_matches`。
 
 ## 配置
 

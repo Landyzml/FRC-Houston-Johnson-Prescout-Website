@@ -372,6 +372,7 @@ code, .code {
 .schedule-match[open] summary { border-bottom: 1px solid rgba(255, 255, 255, 0.10); }
 .schedule-match summary:hover { background: rgba(255, 255, 255, 0.04); }
 .schedule-match-label { font-weight: 900; color: var(--accent); }
+.schedule-source { color: var(--muted); font-size: 12px; font-weight: 500; margin-left: 8px; }
 .schedule-summary-teams {
   font-family: var(--mono);
   font-weight: 800;
@@ -382,6 +383,21 @@ code, .code {
   font-family: var(--sans);
   font-style: normal;
   padding: 0 8px;
+}
+.schedule-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  margin-right: 8px;
+  font-family: var(--sans);
+  font-weight: 900;
+  font-size: 11px;
+  color: rgba(15, 20, 40, 0.95);
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.95), rgba(6, 214, 160, 0.95));
 }
 .schedule-summary-time {
   color: var(--muted);

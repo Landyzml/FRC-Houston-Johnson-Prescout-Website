@@ -142,17 +142,17 @@
               <input id="supabaseSettingKey" class="input" type="text" placeholder="Key 名：tba_api_key" />
             </div>
             <div class="toolbar" style="margin-top:10px">
-              <input id="supabaseDatasetTable" class="input" type="text" placeholder="队伍数据表：prescout_datasets" />
+              <input id="supabaseDatasetTable" class="input" type="text" placeholder="队伍数据表：prescout_teams" />
               <input id="supabaseDatasetName" class="input" type="text" placeholder="数据集名称：default" />
             </div>
             <div class="toolbar" style="margin-top:10px">
               <button id="btnSaveSupabase" class="btn btn-ghost" type="button">保存 Supabase 连接</button>
               <button id="btnLoadTbaFromSupabase" class="btn" type="button">从 Supabase 读取 TBA Key</button>
               <button id="btnSaveTbaToSupabase" class="btn btn-ghost" type="button">把当前 TBA Key 存进 Supabase</button>
-              <button id="btnSaveTeamsToSupabase" class="btn" type="button">上传当前队伍数据</button>
+              <button id="btnSaveTeamsToSupabase" class="btn" type="button" disabled>上传当前队伍数据</button>
               <button id="btnLoadTeamsFromSupabase" class="btn btn-ghost" type="button">读取队伍数据</button>
             </div>
-            <div id="supabaseStatus" class="hint muted">表结构：app_settings + prescout_datasets。</div>
+            <div id="supabaseStatus" class="hint muted">导入 CSV 后可选择是否上传到 Supabase。</div>
           </div>
           <div class="pane">
             <div class="pane-title">当前配置</div>
@@ -170,6 +170,6 @@
       <div>本页面为本地静态站点：不依赖外网；支持 CSV 导入；适合赛前 prescouting。</div>
     </footer>
 
-    <script type="module" src="./app.js?v=20260427-schedule-filter"></script>
+    <script type="module" src="./app.js?v=20260428-supabase-init-msg"></script>
   </body>
 </html>
